@@ -1,250 +1,152 @@
 # Day 1: Calcium Imaging Analysis with Agentic AI
 ## Two-Photon Neural Recording in Real Time
 
-Learn to analyze real neural recordings from awake mice using Python and Claude AI. This 2-hour Friday evening exercise teaches you two core concepts: **ROI detection** (finding neurons) and **neuropil correction** (removing contamination).
+Learn to analyze real neural recordings from awake mice using Python and agentic AI (Cline + Gemini). This Friday evening exercise teaches you three core skills: **ROI detection** (finding neurons), **spike deconvolution** (recovering spikes from fluorescence), and **neuropil correction** (removing contamination).
 
 ---
 
-## What You'll Do
+## Quick Start: Get Set Up on SCC
 
-### 🧠 **Block 1: Simple ROI Detection** (~30 min)
-Learn how neurons are detected in raw imaging data.
+### Step 1: Access the SCC via OnDemand
 
-**Your task**: 
-- Write a simple ROI detection algorithm (Gaussian smoothing + threshold + connected components)
-- Compare your results to Suite2p/Cellpose (professional deep learning pipeline)
-- Understand *why* simple methods fail and deep learning is necessary
+Go to: [https://scc-ondemand2.bu.edu/](https://scc-ondemand2.bu.edu/)
 
-**Key finding**: Your simple algorithm finds 99 cells, but only 24 are real. Why? False positives in bright neuropil (2.4× brighter than real cells).
+Log in with your BU username/password. This opens a web-based interface — no terminal needed.
 
-**Expected output**:
-- Detection sensitivity: ~87.6%
-- Precision: ~23.2%
-- Why professionals use deep learning ✓
+### Step 1b: Launch VS Code Server Interactive App
 
----
+Once logged in to OnDemand:
 
-### 🔧 **Block 2: Neuropil Correction Factor** (~30 min)
-Learn to remove contamination from neural signals.
+1. Click **Interactive Apps** (left sidebar)
+2. Click **VS Code Server**
+3. Fill in the form with these settings:
 
-**Your task**:
-- Load corrected fluorescence: `F_corrected = F - α × Fneu`
-- Test different correction factors (α = 0.2 to 1.2)
-- Find the optimal factor for *your* dataset using three quality metrics:
-  - F vs Fneu correlation
-  - Signal variance
-  - Fano factor (spike-to-spike variability)
+   | Setting | Value |
+   |---------|-------|
+   | **Number of hours** | 6 |
+   | **Number of cores** | 1 |
+   | **Number of GPUs** | 0 |
+   | **Project** | npcr25 |
+   | **Additional modules to load** | python3/3.13.8 |
+   | **Working Directory** | `/projectnb/npcr25/students/username` |
 
-**Key finding**: Standard literature value is α = 0.7, but it's not optimal for all datasets. For this dataset, optimal is α ≈ 0.547 (21.9% lower than standard).
+   ⚠️ **Important**: Replace `username` with your SCC username (same as your BU login)
 
-**Expected results**:
-- Correlation reduction: ~89%
-- Quality score improvement: ~15%
-- Conclusion: Don't blindly copy constants. Validate on *your* data. ✓
+4. Click **Launch**
+5. Wait for the session to start (1-2 minutes)
+6. Click the **VS Code Server** button that appears
+7. VS Code opens in your browser — you're now on the SCC with everything pre-loaded!
 
 ---
 
-## Mathematical Underpinnings: Neuropil Correction
+## Set Up Cline + Gemini AI (Required)
 
-### The Problem
-When imaging neurons, you measure fluorescence from:
-1. **The target cell (F)** — what you want
-2. **Surrounding neuropil (Fneu)** — contamination
+**Cline** is your AI coding assistant. You'll use it throughout the exercise to debug code, explain concepts, and get help.
 
-The signal is: **F_measured = F + α_true × Fneu + noise**
+### Installation Steps
 
-### The Solution
-Correct by subtracting the neuropil:
+1. Click on the **Extensions** toolbar item in VSCode and search for **"Cline"** and install.
+2. Click on the **"robot"** icon that should appear in the left toolbar to open Cline.
+3. Choose **"Bring my own API key"**.
+4. For API provider choose **"OpenAI Compatible"**.
+5. For Base URL type: `https://generativelanguage.googleapis.com/v1beta/openai/`
+6. Navigate to [https://aistudio.google.com/api-keys](https://aistudio.google.com/api-keys) (make sure you are logged in as your personal Google account) and click **"Create API key"**. This will create a project and API key.
+7. For OpenAI Compatible API key, copy-paste the key you just created.
+8. For model type: `gemini-3.1-flash-lite`
 
-```
-F_corrected = F - α × Fneu
-```
+### How to Use Cline
 
-**Why this works**: The neuropil (Fneu) is optically isolated during Suite2p processing, so it's a pure estimate of contamination. Multiplying by α (typically 0.7) removes the average contamination without over-correcting.
+Once installed and configured:
+- Open Cline in VSCode (robot icon in left sidebar)
+- Paste your code or describe what you need help with
+- Ask questions like: "My correlations didn't decrease. What's wrong?" or "Explain neuropil correction"
+- Cline will help you debug, explain code, and suggest improvements
 
-### Why α ≠ 0.7 for All Datasets
-The contamination fraction varies based on:
-- **Cellular packing density** — dense tissue = more neuropil signal
-- **Dye distribution** — uneven loading = different α
-- **Optical properties** — scattering depth affects contamination
+### Usage Limits
 
-**Solution**: Learn α from the data itself by minimizing:
+You get **500 requests per day** with `gemini-3.1-flash-lite`. Check usage at:
+[https://aistudio.google.com/rate-limit](https://aistudio.google.com/rate-limit)
 
-```
-α* = argmin(corr(F - α×Fneu, Fneu))
-```
-
-We want F and Fneu uncorrelated; when they are, contamination is removed.
-
----
-
-## Optional: Spike Deconvolution (Friday 8-9pm)
-
-If you complete Blocks 1–2, you can optionally explore **spike deconvolution** using NNLS (Non-Negative Least Squares):
-
-### The Problem
-Calcium rises and falls over **seconds**, but spikes last **milliseconds**. How do you recover spike times from slow fluorescence?
-
-### The NNLS Solution
-
-Assume fluorescence is a convolution of spikes with the calcium response kernel:
-
-```
-F(t) = ∑ spikes(τ) × kernel(t - τ) + baseline + noise
-```
-
-To recover spikes, solve the inverse problem:
-
-```
-min ||F - convolved_spikes||²₂ + λ × ||spikes||₁
-
-subject to: spikes ≥ 0
-```
-
-**Parameters**:
-- **λ** (regularization) — prevents overfitting. High λ = fewer spikes, less noise; low λ = more spikes, more noise
-- **threshold** — final binarization: `spikes[spikes < threshold] = 0`
-
-**Why NNLS?**
-- Non-negative constraint makes biological sense (spikes can't be negative)
-- L1 regularization promotes sparsity (natural spike structure)
-- Simple alternative to Suite2p's OASIS algorithm
-
-### NNLS vs OASIS
-| Metric | NNLS | OASIS |
-|--------|------|-------|
-| Speed | Slow (~seconds/cell) | Fast (~ms/cell) |
-| False positives | ~34% | ~15% |
-| False negatives | ~0% | ~5% |
-| When to use | Teaching / validation | Production |
+If you run out:
+- Switch to `gemma-4-26b-a4b-it` (1.5K requests/day, less capable)
+- Contact an instructor for unlimited access via our Google Cloud Project
 
 ---
 
-## Setup Instructions
+## Step 2: Clone This Repository (via Cline)
 
-### Step 1: Log In to SCC
+Now that Cline is installed, use it to clone the repo.
 
-Open your terminal on your personal machine and SSH to the SCC:
+**In the VS Code terminal**, ask Cline:
 
-```bash
-ssh username@scc.bu.edu
-```
+> "Clone the repository and navigate to it. Run these commands:
+> ```
+> git clone https://github.com/depasquale-lab/NPC-SummerSchool-2026-AI-Coding.git
+> cd NPC-SummerSchool-2026-AI-Coding
+> ```
+> Then verify it worked by running `ls README.md`"
 
-Replace `username` with your SCC username (same as your BU username).
+Cline will execute these commands for you. You should see the README.md file confirming it cloned successfully.
 
-### Step 2: Navigate to Your Project Directory
+**Next, create a working branch** for your exercise work. Ask Cline:
 
-```bash
-cd /projectnb/npcr25/students/username
-```
+> "Create a new git branch for my work. Run:
+> ```
+> git config user.email 'your-bu-email@bu.edu'
+> git config user.name 'Your Full Name'
+> git checkout -b username
+> ```
+> Then confirm with `git branch`"
 
-Replace `username` with your SCC username.
+(Replace `username` with your SCC username.) This creates your personal branch where you'll commit your progress.
 
-### Step 3: Clone This Repo
-
-```bash
-git clone https://github.com/anthropics/ai-coding-neuroscience.git
-cd ai-coding-neuroscience
-```
-
-(Replace with actual repo URL when available)
-
-### Step 4: Check Your Python Version
+**Important**: After you complete progress on each exercise (Exercise 1, 2, or 3), commit and push your work:
 
 ```bash
-python3 --version
+git add -A
+git commit -m "Exercise N complete: <brief description>"
+git push origin username
 ```
 
-You should have **Python 3.13.8**. If not, load the module:
-
-```bash
-module load python/3.13.8
-```
-
-### Step 5: Create and Activate Virtual Environment
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-You should see `(.venv)` in your terminal prompt.
-
-### Step 6: Install Dependencies
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-This installs:
-- **numpy** — numerical computing
-- **scipy** — signal processing & statistics
-- **h5py** — load Suite2p .mat files
-- **matplotlib** — plotting
-- **jupyter** — notebooks
-- **pytest** — testing
-
-### Step 7: Start Jupyter (CPU-Only Mode)
-
-On the SCC, **request a CPU-only job** (not GPU):
-
-```bash
-# Request an interactive CPU job for 4 hours
-srun --partition=compute --nodes=1 --cpus-per-task=4 --mem=8G --time=04:00:00 --pty bash
-
-# Start Jupyter
-source .venv/bin/activate
-jupyter notebook --ip=0.0.0.0 --no-browser
-```
-
-Then open the URL it prints (looks like `http://localhost:8888/?token=...`).
-
-### Step 8: View Notebooks in Chrome or Safari
-
-- **Chrome** or **Safari** are recommended (better Jupyter performance than Firefox)
-- Open the Jupyter URL from Step 7
-- Click `tutorials/day_1_core/simple_roi_detection.ipynb`
+Pushing after each exercise ensures your work is backed up and instructors can see your progress.
 
 ---
 
-## Your Work on SCC
+## Step 3: Set Up Python Environment (via Cline)
 
-### Directory Structure
+Now that Cline is installed, use it to set up your Python environment.
+
+**In the VS Code terminal**, ask Cline:
+
+> "Set up a Python virtual environment with all required packages. Run these commands:
+> ```
+> python3 -m venv .venv
+> source .venv/bin/activate
+> pip install --upgrade pip
+> pip install -r requirements.txt
+> ```
+> Then verify it worked by running `python3 -c "import numpy; print('Success!')"`"
+
+Cline will execute these commands for you. You should see `(.venv)` in your terminal prompt when done.
+
+---
+
+## Your Work Directory Structure
 
 ```
 /projectnb/npcr25/students/username/
-├── ai-coding-neuroscience/              ← Clone of this repo
-│   ├── tutorials/day_1_core/            ← Notebooks you'll edit
-│   ├── requirements.txt
-│   └── README.md                        ← This file
+├── NPC-SummerSchool-2026-AI-Coding/     ← Cloned repo (contains only README.md + assets/)
+│   ├── README.md                        ← This guide
+│   └── assets/                          ← Images (GIFs, PNGs)
 │
-└── DATA FILES (local, not in repo)      ← Use /projectnb/npcr25/shared/
-    ├── run02-054/
-    ├── run06-058/
-    └── run03-055/
-```
-
-### Branching Workflow
-
-Before you start editing:
-
-```bash
-cd ai-coding-neuroscience
-
-# Create a branch for your work
-git branch my-analysis-day1
-git checkout my-analysis-day1
-
-# OR in one command:
-git checkout -b my-analysis-day1
-
-# When you're done, push to GitHub:
-git add tutorials/day_1_core/
-git commit -m "Day 1: ROI detection + neuropil correction"
-git push origin my-analysis-day1
-
-# Then create a Pull Request on GitHub for peer review
+├── tutorials/day_1_core/                ← YOU CREATE with Cline
+│   ├── simple_roi_detection.ipynb       ← Exercise 1: ROI detection
+│   ├── neuropil_correction_factor.ipynb ← Exercise 2: Spike deconvolution
+│   └── spike_deconvolution.ipynb        ← Exercise 3: Neuropil correction
+│
+├── my_analysis.py, notes.txt, etc.      ← YOUR work files
+│
+└── (data accessed from /projectnb2/npcr25/projects/two_photon/.../processed/)
 ```
 
 ---
@@ -276,29 +178,38 @@ The raw two-photon imaging data comes from **awake Thy1-jRGECO1a mice** (layer 2
 
 ### File Locations
 
-**Shared data** (accessible to all students):
+**All data is in a shared lab repository** (read access for students):
 ```
-/projectnb/npcr25/shared/imaging_data/
-├── run02-054/
-│   ├── F.npy
-│   ├── Fneu.npy
-│   ├── iscell.npy
-│   ├── spks.npy
-│   ├── stat.npy
-│   └── ops.npy
-├── run06-058/
-├── run03-055/
-└── ...
+/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/
+├── processed/                              ← Fluorescence & cell info
+│   ├── TSeries-03042024-run01-053/
+│   ├── TSeries-03042024-run02-054/        ← Used in this exercise
+│   │   ├── F.npy
+│   │   ├── Fneu.npy
+│   │   ├── iscell.npy
+│   │   ├── stat.npy
+│   │   ├── ops.npy
+│   │   └── TSeries-03042024-run02-054*.ome.tif
+│   └── ... (more runs)
+│
+└── Suite2P-inferred-spikes/                ← OASIS spike inference
+    ├── TSeries-03042024-run02-054/
+    │   └── spks.npy
+    └── ... (more runs)
 ```
 
-**Master data** (Martin's lab, 9 runs):
-```
-/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/processed/
-├── TSeries-03042024-run01-053/
-├── TSeries-03042024-run02-054/  ← Used in this exercise
-├── TSeries-03042024-run03-055/
-└── ... (6 more runs)
-```
+### Dataset Quality Summary
+
+| Run | Cells | Duration | Quality (% ≥0.15) | Avg Spikes/Cell | Recommended For |
+|-----|-------|----------|-------------------|-----------------|-----------------|
+| run02-054 | 125 | 5 min | 89% | 227 | ⭐ **START HERE** — balanced & well-documented |
+| run06-058 | 99 | 10 min | 99% | 448 | Long recording, high quality |
+| run03-055 | 168 | 5 min | 99% | 227 | Most cells, excellent quality |
+| run05-057 | 90 | 5 min | 98% | 227 | Small population, clean |
+| run08-060 | 84 | 10 min | 100% | 448 | Perfect quality, short population |
+| run09-061 | 78 | 10 min | 77% | 452 | Lower quality (edge case study) |
+
+**Recommended: run02-054** — This is the "goldilocks" dataset: balanced cell count (125), moderate duration (5 min), good quality (89%), well-documented in tutorials. Start here.
 
 ### Example: Loading Data in Python
 
@@ -306,29 +217,85 @@ The raw two-photon imaging data comes from **awake Thy1-jRGECO1a mice** (layer 2
 import numpy as np
 from pathlib import Path
 
-# Your SCC home directory
-data_dir = Path('/projectnb/npcr25/shared/imaging_data/run02-054')
+# Shared data directory with processed outputs
+data_dir = Path('/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/processed')
+run_dir = data_dir / 'TSeries-03042024-run02-054'
 
-# Load Suite2p outputs
-F = np.load(data_dir / 'F.npy')          # (125, 4535)
-Fneu = np.load(data_dir / 'Fneu.npy')    # (125, 4535)
-iscell = np.load(data_dir / 'iscell.npy') # (125,)
-stat = np.load(data_dir / 'stat.npy', allow_pickle=True)  # (125,)
+# Load fluorescence and cell info from processed directory
+F = np.load(run_dir / 'F.npy')              # (125, 4535) — raw fluorescence
+Fneu = np.load(run_dir / 'Fneu.npy')        # (125, 4535) — neuropil fluorescence
+iscell = np.load(run_dir / 'iscell.npy')    # (125, 2) — cell quality scores
+stat = np.load(run_dir / 'stat.npy', allow_pickle=True)  # (125,) — ROI locations
+
+# Load OASIS-inferred spikes from separate directory
+spks_dir = Path('/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes')
+spks = np.load(spks_dir / 'TSeries-03042024-run02-054' / 'spks.npy')  # (125, 4535) — OASIS spikes
 
 # Filter by quality (iscell ≥ 0.15)
 good_cells = iscell[:, 0] >= 0.15
 F_good = F[good_cells, :]
 Fneu_good = Fneu[good_cells, :]
 
-print(f"Loaded {F.shape[0]} cells, {F.shape[1]} frames")
+# Counts after quality filtering
+print(f"Total cells: {F.shape[0]}")
 print(f"Good cells: {F_good.shape[0]} ({100*F_good.shape[0]/F.shape[0]:.1f}%)")
+print(f"Frames: {F.shape[1]} ({F.shape[1]/15/60:.1f} minutes at 15 Hz)")
 ```
+
+### Why run02-054?
+
+This recording provides:
+- **Balanced cell count** (125 cells) — not too many to overwhelm, not too few to miss patterns
+- **Moderate length** (5 min = 4535 frames @ 15 Hz) — enough activity, short runtime for testing
+- **Good quality** (89% pass iscell ≥ 0.15) — mostly clean data, some edge cases to learn from
+- **Well-documented** — used in tutorial examples and reference implementations
+- **Diverse activity** — neurons with varied spike rates (from quiet to very active)
+
+If you want to explore other datasets, they're all in the same directory structure—just replace `run02-054` with `run03-055`, `run06-058`, etc.
+
+### What Raw Two-Photon Imaging Looks Like
+
+Here's an example of what you're analyzing — raw two-photon imaging with overlaid ROIs and neural activity:
+
+![Two-Photon Imaging with ROIs and Activity](assets/imaging_preview.gif)
+
+*Raw imaging frames (gray) with cyan ROI circles (Suite2p detected neurons) and red/orange activity heatmap (fluorescence).*
+
+**What you're seeing:**
+- **Black/gray background** — raw intensity (median-subtracted imaging)
+- **Cyan circles** — detected ROIs from Suite2p (cell bodies, ~20-40 μm diameter)
+- **Red/orange heatmap** — neural activity (fluorescence, gradually accumulating)
+
+**Key observations:**
+1. ROIs are precisely positioned on bright cell bodies
+2. Neuropil (surrounding area) is visible but dimmer
+3. Activity pulses within ROI circles correspond to neural spikes
+4. Heatmap gradually accumulates to show activity patterns over time
+
+This is the raw data you'll be working with — images like these are where your algorithms will detect ROIs, measure fluorescence, and estimate spike times.
 
 ---
 
-## Milestones & Benchmarks
+## Exercise 1: Simple ROI Detection
 
-### Block 1 Milestones
+### What You'll Learn
+
+Learn how neurons are detected in raw imaging data.
+
+**Your task**: 
+- Write a simple ROI detection algorithm (Gaussian smoothing + threshold + connected components)
+- Compare your results to Suite2p/Cellpose (professional deep learning pipeline)
+- Understand *why* simple methods fail and deep learning is necessary
+
+**Key finding**: Your simple algorithm finds 99 cells, but only 24 are real. Why? False positives in bright neuropil (2.4× brighter than real cells).
+
+**Expected output**:
+- Detection sensitivity: ~87.6%
+- Precision: ~23.2%
+- Why professionals use deep learning ✓
+
+### Milestones
+
 - [ ] Write ROI detection code (Gaussian + threshold + connected components)
 - [ ] Detect cells in the median image
 - [ ] Compare to Suite2p detection (`stat.npy`)
@@ -337,9 +304,420 @@ print(f"Good cells: {F_good.shape[0]} ({100*F_good.shape[0]/F.shape[0]:.1f}%)")
 
 **Benchmark**: ~87% sensitivity, ~23% precision (simple method is limited—this is expected!)
 
+### Expected Results
+
+**What you should aim for:**
+
+![ROI Detection Comparison](assets/real_stage1_roi_detection.png)
+
+*Your simple algorithm (yellow circles) vs Suite2p (red circles). Note the false positives in bright neuropil — this is expected! Simple methods can't distinguish cells from bright background.*
+
+**Key observations:**
+- ~87% of Suite2p cells are detected (good coverage)
+- ~75% of your detections are false positives (expected limitation)
+- All false positives are in bright neuropil areas (explains why simple threshold fails)
+- Deep learning (Suite2p/Cellpose) works because it learns what real cells look like
+
 ---
 
-### Block 2 Milestones
+## Exercise 2: Spike Deconvolution (NNLS vs OASIS)
+
+### What You'll Learn
+
+Learn to recover spike times from fluorescence using NNLS, validate on synthetic data, then apply to real data and compare to OASIS.
+
+### Part A: Generate Synthetic Data
+
+Create ground-truth spike trains and generate fluorescence:
+
+1. **Define spike train** (ground truth)
+
+$$\mathbf{s}_{\text{true}} \in \{0, 1\}^{n_{\text{frames}}}$$
+
+- Poisson spike rate: $\lambda = 0.05$ spikes/frame (realistic for real neurons)
+- Refractory period: 5 frames minimum between spikes
+- Example: $\mathbf{s}_{\text{true}} = [0, 1, 0, 0, 0, 1, 0, \ldots]$
+
+2. **Convolve with calcium kernel**
+
+$$\mathbf{F}_{\text{clean}} = \mathbf{h} \otimes \mathbf{s}_{\text{true}} + \text{baseline}$$
+
+where:
+- $\mathbf{h} = \text{exponential decay: } h[t] = \exp(-t/\tau_{\text{decay}})$
+- $\tau_{\text{decay}} \approx 400$ ms (calibrated to real indicator)
+- $\text{baseline} \approx 100$-$200$ counts (resting fluorescence)
+
+3. **Add realistic noise**
+
+$$\mathbf{F}_{\text{obs}} = \mathbf{F}_{\text{clean}} + \varepsilon$$
+
+$$\varepsilon \sim \mathcal{N}(0, \sigma^2) \text{ where } \sigma \text{ depends on:}$$
+
+- Photon shot noise: $\sigma_{\text{shot}} = \sqrt{\mathbf{F}_{\text{clean}}} / \text{gain}$
+- Gaussian noise: $\sigma_{\text{gaussian}} \approx 5$-$10$ counts
+- Total: $\sigma = \sqrt{\sigma_{\text{shot}}^2 + \sigma_{\text{gaussian}}^2}$
+
+### Part B: Cull and Preprocess Synthetic Data
+
+Filter traces for quality:
+
+1. **Remove bad traces**
+   - Traces with $\text{SNR} < \text{threshold}$ (too noisy)
+   - Traces with negative values (unphysical)
+   - Traces with unrealistic baseline ($< 50$ or $> 500$)
+
+2. **Standardize traces**
+   - Subtract baseline: $\mathbf{F}_{\text{std}} = \mathbf{F}_{\text{obs}} - \text{median}(\mathbf{F}_{\text{obs}})$
+   - Optional: normalize by median (for scale invariance)
+
+3. **Quality metrics**
+   - $\text{SNR} = \frac{\text{std}(\mathbf{F}_{\text{clean}})}{\text{std}(\varepsilon)}$
+   - Keep traces with $\text{SNR} > 2$
+   - Keep traces with at least 5 spikes
+
+### Part C: Recover the Generative Data (Inverse Problem)
+
+Apply NNLS to recover spikes:
+
+1. **Implement NNLS solver**
+
+$$\min_{\mathbf{s}} \left\|\mathbf{F}_{\text{obs}} - \mathbf{H}\mathbf{s}\right\|_2^2 + \lambda\|\mathbf{s}\|_1$$
+
+$$\text{subject to: } \mathbf{s} \geq 0$$
+
+where $\mathbf{H}$ is the Toeplitz convolution matrix: $H_{ij} = h_{i-j}$ for $i \geq j$, else 0
+
+2. **Optimize regularization parameter λ**
+   - Test range: $\lambda \in [0.0001, 0.01]$
+   - For each $\lambda$, measure false positive + false negative rates
+   - Choose $\lambda$ that minimizes total error
+
+3. **Threshold and binarize**
+
+$$\mathbf{s}_{\text{recovered}} = (\text{NNLS}_{\text{output}} > \tau) \, ? \, 1 : 0$$
+
+- Test threshold range: $\tau \in [0.01, 0.15]$
+- Choose $\tau$ that maximizes $F_1 = \frac{2 \times (\text{precision} \times \text{recall})}{\text{precision} + \text{recall}}$
+
+4. **Evaluate against ground truth**
+
+Compare $\mathbf{s}_{\text{recovered}}$ vs $\mathbf{s}_{\text{true}}$:
+
+- Sensitivity = $\frac{\text{TP}}{\text{TP} + \text{FN}}$ ← % of true spikes found
+- Precision = $\frac{\text{TP}}{\text{TP} + \text{FP}}$ ← % of recovered spikes correct
+- $F_1 = \frac{2(\text{sens} \times \text{prec})}{\text{sens} + \text{prec}}$ ← harmonic mean
+- Timing error = $\text{mean}(|t_{\text{recovered}} - t_{\text{true}}|)$ ← how accurate timing is
+
+where TP/FP/FN defined as:
+- TP: recovered spike within 1 frame of true spike
+- FP: recovered spike > 1 frame from any true spike
+- FN: true spike > 1 frame from any recovered spike
+
+### Part D: Apply to Real Data and Compare
+
+⚠️ **Note**: Running NNLS on all 125 cells × 4535 frames is computationally expensive (~5-10 minutes). For faster testing, use a subset: first 20 cells × 1500 frames (~10-15 seconds).
+
+1. **Run NNLS on real fluorescence** — Your method on real neural data
+   - Load real F (125 cells × 4535 frames)
+   - _(Optional: use subset for faster iteration — first 20 cells, first 1500 frames)_
+   - Use optimal λ and threshold learned from synthetic data
+   - Extract spike times for all cells (or your subset)
+
+2. **Load OASIS reference**
+   - OASIS is Suite2p's spike inference algorithm (non-negative deconvolution)
+   - Load from: `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes/TSeries-03042024-run02-054/spks.npy`
+   - Same cells, same recording, same neuropil correction (α = 0.7)
+
+3. **Define a Performance Metric**
+
+You need to decide how to measure agreement between NNLS and OASIS. Here are common approaches:
+
+**Threshold: When is a spike "detected"?**
+
+Different methods have different output scales:
+- **OASIS** outputs: continuous amplitudes, often with sparse sharp peaks
+  - Typical threshold: amplitude $> 0$ (any positive value is a spike)
+- **NNLS** outputs: continuous amplitudes with broader, smoother waveforms due to regularization
+  - Typical threshold: amplitude $> 0.1$ (need stronger signal to count as a spike)
+
+You must define consistent thresholds to make a fair comparison.
+
+**Metric: How to measure agreement?**
+
+Once you have binary spike times (detected or not), compute agreement for each cell:
+
+$$\text{Jaccard Index} = \frac{\text{spikes both detect}}{\text{spikes either detects}} = \frac{\text{both}}{\text{both} + \text{NNLS\_only} + \text{OASIS\_only}}$$
+
+- **both**: frame where both methods detected a spike
+- **NNLS_only**: frame where only NNLS detected
+- **OASIS_only**: frame where only OASIS detected
+
+Alternative metrics using ground truth (if available):
+
+$$\text{Sensitivity} = \frac{\text{TP}}{\text{TP} + \text{FN}} \quad \text{(% of true spikes found)}$$
+
+$$\text{Precision} = \frac{\text{TP}}{\text{TP} + \text{FP}} \quad \text{(% of detected spikes correct)}$$
+
+$$F_1 = \frac{2 \times \text{Sensitivity} \times \text{Precision}}{\text{Sensitivity} + \text{Precision}} \quad \text{(harmonic mean)}$$
+
+where TP = true positive (spike correctly detected), FP = false positive (detected but no true spike), FN = false negative (true spike missed)
+
+### Comparison Results
+
+Here's an example comparison using the recommended thresholds (OASIS > 0, NNLS > 0.1):
+
+**Low Activity Cell** — Sparse firing, mostly quiet
+![NNLS vs OASIS: Low Activity](assets/nnls_vs_oasis_low_activity.png)
+
+**Medium Activity Cell** — Moderate spike rate, typical behavior
+![NNLS vs OASIS: Medium Activity](assets/nnls_vs_oasis_medium_activity.png)
+
+**High Activity Cell** — Frequent spikes, busty neuron
+![NNLS vs OASIS: High Activity](assets/nnls_vs_oasis_high_activity.png)
+
+**Key Observations:**
+- **Green (OASIS)**: Sparse, sharp peaks. Minimal regularization.
+- **Orange (NNLS)**: Broader waveforms. L1 smoothness regularization makes spikes less sharp.
+- **Agreement**: ~97% Jaccard similarity on this dataset (both methods find ~the same spikes)
+
+The differences in spike shape reflect different optimization objectives, not preprocessing tricks:
+- OASIS: $\min_s \|\mathbf{F} - \mathbf{h} \otimes \mathbf{s}\|_2^2$ (raw squared error)
+- NNLS: $\min_s \|\mathbf{F} - \mathbf{h} \otimes \mathbf{s}\|_2^2 + \lambda \text{(smoothness)}$ (with regularization)
+
+**Your task**: Choose your thresholds, compute a metric for your NNLS results, and interpret whether NNLS is competitive with OASIS on this dataset.
+
+### The Generative Model (Forward Problem)
+
+When a neuron fires an action potential, the membrane depolarizes for ~1 ms. But calcium indicators respond slowly, with rise times of 10-100 ms and decay times of 100-1000 ms. The measured fluorescence is:
+
+$$F(t) = \text{baseline} + \sum_{\tau} s(\tau) \otimes h(t - \tau) + \varepsilon(t)$$
+
+Breaking this down:
+
+**1. Spike train** $s(t)$: Binary sequence of action potentials
+
+$$s(t) \in \{0, 1\} \text{ for each timestep } t$$
+
+- $s(t) = 1$ means a spike occurred
+- $s(t) = 0$ means no spike
+
+**2. Calcium kernel** $h(t)$: Impulse response of the indicator
+
+$$h(t) = \alpha \exp(-t/\tau_{\text{decay}}) - \beta \exp(-t/\tau_{\text{rise}}) \text{ for } t \geq 0$$
+
+$$h(t) = 0 \text{ for } t < 0$$
+
+where:
+- $\tau_{\text{decay}} \approx 300$-$500$ ms (indicator decay)
+- $\tau_{\text{rise}} \approx 50$-$200$ ms (indicator rise)
+- $\alpha, \beta$ scale the amplitude
+
+**3. Convolution** ($\otimes$): Each spike is "blurred" by the kernel
+
+$$\text{convolved}(t) = \sum_{\tau} s(\tau) \times h(t - \tau)$$
+
+In matrix form (discrete time):
+
+$$\mathbf{F} = \mathbf{H} \mathbf{s} + \mathbf{b} + \varepsilon$$
+
+where:
+- $\mathbf{F}$: observed fluorescence ($n_{\text{frames}}$,)
+- $\mathbf{H}$: convolution matrix ($n_{\text{frames}} \times n_{\text{frames}}$, Toeplitz structure)
+- $\mathbf{s}$: spike amplitudes ($n_{\text{frames}}$,)
+- $\mathbf{b}$: baseline (scalar or estimated)
+- $\varepsilon$: noise $\sim \mathcal{N}(0, \sigma^2)$
+
+**4. Noise model** $\varepsilon(t)$: Measurement and biological noise
+
+$$\varepsilon(t) \sim \mathcal{N}(0, \sigma^2) \text{ independent Gaussian noise at each timestep}$$
+
+$\sigma$ depends on:
+- Photon shot noise: $\propto \sqrt{F_{\text{clean}}}$
+- Electrical noise (amplifier): $\approx 5$-$10$ counts
+- Biological variability
+
+### The Inverse Problem: NNLS Deconvolution
+
+Given observed fluorescence $\mathbf{F}$ and kernel $\mathbf{h}$, recover spike times $\mathbf{s}$:
+
+$$\min_{\mathbf{s}} \|\mathbf{F} - \mathbf{H}\mathbf{s}\|_2^2 + \lambda \|\mathbf{s}\|_1$$
+
+$$\text{subject to: } \mathbf{s} \geq 0$$
+
+**Term breakdown**:
+
+- **$\|\mathbf{F} - \mathbf{H}\mathbf{s}\|_2^2$**: Least squares fit (minimize residual)
+  - Measures how well recovered spikes explain the data
+  - Units: (fluorescence counts)²
+  
+- **$\lambda \|\mathbf{s}\|_1$**: L1 regularization (sparsity penalty)
+  - $\lambda$ controls tradeoff: fit quality vs sparsity
+  - High $\lambda$ → fewer spikes (assumes most timepoints have no spike)
+  - Low $\lambda$ → more spikes (allows overfitting)
+  
+- **$\mathbf{s} \geq 0$**: Non-negativity constraint
+  - Biological: spike amplitudes can't be negative
+  - Prevents unphysical solutions
+
+**Solution approach**:
+1. Form the optimization problem with objective and constraint
+2. Use iterative solver (e.g., proximal gradient descent, coordinate descent)
+3. Iterate: minimize residual while maintaining $\mathbf{s} \geq 0$ and sparsity
+4. Output: spike amplitudes $\mathbf{s}$ at each timepoint
+
+**Post-processing**: Convert amplitudes to binary spike times
+
+$$\mathbf{s}_{\text{binary}} = \begin{cases} 1 & \text{if } s_i > \text{threshold} \\ 0 & \text{otherwise} \end{cases}$$
+
+where threshold is typically:
+- $\text{threshold} = 0.08$ (optimal for this data)
+- $\text{threshold} = \text{np.percentile}(\mathbf{s}, 90)$ (automatic)
+
+### NNLS vs OASIS
+
+| Aspect | NNLS | OASIS |
+|--------|------|-------|
+| **Algorithm** | Least squares + L1 penalty | Exponential filtering + thresholding |
+| **Speed** | Slow (~seconds/cell) | Fast (~ms/cell) |
+| **False positives** | ~34% | ~15% |
+| **False negatives** | ~0% | ~5% |
+| **Parameters** | λ (regularization), threshold | c (decay constant), threshold |
+| **Interpretability** | Direct inverse problem | Heuristic filtering |
+| **When to use** | Teaching, validation, understanding | Production, large datasets |
+| **Code complexity** | ~50 lines | ~1000 lines (production OASIS) |
+
+**Why OASIS is better in production**:
+- Exponential filtering is fast and parallelizable
+- Pre-computed lookup tables optimize parameters
+- Better empirical performance on real data
+- Handles non-stationarity (changing baseline) better
+
+**Why NNLS for learning**:
+- Clear mathematical interpretation
+- Each step is understandable
+- Easy to add constraints (e.g., refractory period)
+- Good for validation (gold standard on synthetic data)
+
+### Milestones
+
+**Part A: Synthetic Data Validation**
+- [ ] Generate synthetic spike trains
+- [ ] Convolve with calcium kernel to create fluorescence
+- [ ] Add noise to match real data characteristics
+- [ ] Cull bad traces (remove/filter outliers)
+- [ ] Implement NNLS algorithm
+- [ ] Recover spikes from synthetic fluorescence
+- [ ] Measure: sensitivity, precision, F1 score vs ground truth
+- [ ] Plot recovered vs true spikes for example traces
+
+**Benchmark (Synthetic)**:
+- F1 score: ~0.78
+- Sensitivity: 100% (catch all spikes)
+- Precision: ~65% (some false positives)
+
+**Part B: Real Data Analysis**
+- [ ] Apply NNLS to real fluorescence data
+- [ ] Load OASIS spike times from Suite2p (`spks.npy`)
+- [ ] Compare NNLS vs OASIS on example cells
+- [ ] Measure agreement (how often do they find the same spikes?)
+- [ ] Plot side-by-side comparison
+
+**Benchmark (Real Data)**:
+- NNLS finds similar spike patterns to OASIS
+- Differences expected due to algorithm design
+- Visual agreement on major events
+
+### Expected Results
+
+**Synthetic data validation (what to expect):**
+
+![Synthetic Spike Recovery](assets/synthetic_stage4_spikes.png)
+
+*Left: ground truth spikes (you created these). Right: NNLS recovered spikes. With optimal λ and threshold, recovery should be nearly perfect on synthetic data.*
+
+**Real data comparison (NNLS vs OASIS):**
+
+![NNLS vs OASIS Comparison](assets/synthetic_stage5_comparison.png)
+
+*Top: NNLS spike times (your method). Bottom: OASIS (Suite2p's algorithm). Agreement on major events, differences on marginal spikes.*
+
+**Detailed comparison:**
+
+![Spike Method Comparison](assets/spike_method_comparison.png)
+
+*Side-by-side traces: NNLS vs OASIS on real neurons. Look for:*
+- *Similar spike timing on obvious events*
+- *NNLS tends to be more sensitive (finds more spikes)*
+- *OASIS is more conservative (fewer false positives)*
+- *Biggest disagreements on low-SNR cells*
+
+**Key findings**:
+- Synthetic validation: F1 ~0.78, Sensitivity 100%, Precision ~65%
+  - Perfect recovery on clean synthetic data (proof of concept)
+  - Precision loss due to noise (as expected)
+  
+- Real data comparison: NNLS agrees with OASIS ~75-80%
+  - Both methods find same major spike events
+  - Differences on marginal/ambiguous events
+  - NNLS more sensitive, OASIS more specific
+  
+- Conclusion: Validate on synthetic data → ensures algorithm is correct; apply to real data → understand practical performance ✓
+
+---
+
+## Exercise 3: Neuropil Removal
+
+### What You'll Learn
+
+Learn to remove contamination from neural signals by finding the optimal correction factor.
+
+**Your task**:
+- Load corrected fluorescence: `F_corrected = F - α × Fneu`
+- Test different correction factors (α = 0.2 to 1.2)
+- Find the optimal factor for *your* dataset using three quality metrics:
+  - F vs Fneu correlation
+  - Signal variance
+  - Fano factor (spike-to-spike variability)
+
+**Key finding**: Standard literature value is α = 0.7, but it's not optimal for all datasets. For this dataset, optimal is α ≈ 0.547 (21.9% lower than standard).
+
+### Mathematical Underpinnings
+
+#### The Problem
+
+When imaging neurons, you measure fluorescence from:
+1. **The target cell (F)** — what you want
+2. **Surrounding neuropil (Fneu)** — contamination
+
+The signal is: **F_measured = F + α_true × Fneu + noise**
+
+#### The Solution
+
+Correct by subtracting the neuropil:
+
+```
+F_corrected = F - α × Fneu
+```
+
+**Why this works**: The neuropil (Fneu) is optically isolated during Suite2p processing, so it's a pure estimate of contamination. Multiplying by α (typically 0.7) removes the average contamination without over-correcting.
+
+#### Why α ≠ 0.7 for All Datasets
+
+The contamination fraction varies based on:
+- **Cellular packing density** — dense tissue = more neuropil signal
+- **Dye distribution** — uneven loading = different α
+- **Optical properties** — scattering depth affects contamination
+
+**Solution**: Learn α from the data itself by minimizing:
+
+```
+α* = argmin(corr(F - α×Fneu, Fneu))
+```
+
+We want F and Fneu uncorrelated; when they are, contamination is removed.
+
+### Milestones
+
 - [ ] Load fluorescence and neuropil from .npy files
 - [ ] Implement correction: `F_corrected = F - alpha * Fneu`
 - [ ] Test alpha values from 0.2 to 1.2
@@ -352,232 +730,29 @@ print(f"Good cells: {F_good.shape[0]} ({100*F_good.shape[0]/F.shape[0]:.1f}%)")
 - Optimal alpha: ~0.55 (not 0.7!)
 - Visual inspection: Raw shows Fneu contamination, corrected is clean
 
----
+### Expected Results
 
-## Expected Results (From Our Analysis)
+**Before/After Correction:**
 
-### ROI Detection Example
-![ROI Detection Comparison](docs/figures/examples/real_stage1_roi_detection.png)
+![Neuropil Correction Before/After](assets/real_stage3_correction.png)
 
-*Your simple algorithm (yellow circles) vs Suite2p (red circles). Note the false positives in bright neuropil.*
+*Top row: raw fluorescence (pink/red, contaminated by neuropil). Bottom row: corrected fluorescence (blue/white, clean). Note:*
+- *Raw traces show slow drift and neuropil contamination*
+- *Corrected traces are sharper and less contaminated*
+- *Spike-like events are more visible after correction*
 
-### Before/After Neuropil Correction
-![Neuropil Correction](docs/figures/examples/real_stage3_correction.png)
+**Correlation Analysis (Why α matters):**
 
-*Top: raw fluorescence (pink/red). Bottom: corrected (blue/white). Note how contamination is removed.*
+![Correlation Before/After](assets/correlation_before_after.png)
 
-### Correlation Improvement
-![Correlation Reduction](docs/figures/reference/correlation_before_after.png)
+*Left: raw F vs Fneu are highly correlated (r ≈ 0.6-0.8), indicating contamination. Right: corrected F vs Fneu are uncorrelated (r ≈ 0.0), proving contamination removed.*
 
-*Left: raw F vs Fneu are highly correlated (contaminated). Right: corrected F vs Fneu are uncorrelated (clean).*
+**Optimal α Factor Discovery:**
 
-### Live Imaging Preview
-See the raw two-photon imaging with overlaid ROIs and activity:
+![Raw vs Corrected Population](assets/raw_vs_corrected_all_cells.png)
 
-**Video**: `instructor_materials/imaging_preview/raw_with_rois_activity_FIXED.mp4`
+*Heatmaps of all 111 neurons: raw (left) vs corrected (right, with α ≈ 0.547). Observe:*
+- *Raw: dominated by slow neuropil oscillations (orange/red background)*
+- *Corrected: sparse, sharp spike events (blue baseline with sharp peaks)*
+- *Visual proof that optimal α removes contamination*
 
-This shows:
-- **Black/gray background** — raw intensity (median-subtracted)
-- **Cyan circles** — detected ROIs from Suite2p
-- **Red/orange heatmap** — fluorescence activity (slowly fading in)
-
-Watch how:
-1. ROIs are positioned on bright cell bodies
-2. Neuropil (surrounding area) is dimmer
-3. Activity pulses correspond to spikes
-
----
-
-## Python Environment
-
-### What's Pre-Installed
-
-Your `.venv/` includes everything you need:
-
-```
-numpy==2.5.1           # Numerical arrays
-scipy==1.18.0          # Signal processing
-matplotlib==3.11.1     # Plotting
-h5py==3.16.0           # Load .mat files
-pytest==9.1.1          # Unit tests
-jupyter==1.0.0         # Notebooks
-```
-
-### Using Claude AI in Your Code
-
-When stuck, use Claude via:
-
-1. **Claude Code IDE** (VSCode extension)
-   - Install: VSCode → Extensions → "Claude Code"
-   - Ctrl+K (or Cmd+K on Mac) to open Claude inline
-   - Paste code, ask questions, get suggestions
-
-2. **Claude Console** (web interface)
-   - Go to console.anthropic.com
-   - Create a new thread for your exercise
-   - Share notebook code and ask for help
-
-3. **API Key Usage** (if configured)
-   - Set: `export ANTHROPIC_API_KEY=your-key`
-   - Use in scripts to call Claude programmatically
-
----
-
-## Troubleshooting
-
-### "File not found: F.npy"
-Check the path:
-```bash
-ls /projectnb/npcr25/shared/imaging_data/run02-054/F.npy
-```
-If it doesn't exist, the data hasn't been copied to your location yet. Ask an instructor.
-
-### "ImportError: No module named h5py"
-Activate the virtual environment:
-```bash
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### "My correlations didn't decrease"
-Common mistakes:
-1. **Wrong formula**: `F - alpha*Fneu` (not `F + alpha*Fneu`)
-2. **Forgot to z-score**: Correlation needs normalized signals
-3. **Used raw F twice**: Make sure you're comparing raw vs corrected, not raw vs raw
-4. **Wrong indexing**: Data might be transposed—check shape
-
-### "Shapes don't match"
-The .npy files are typically (ncells, nframes). If you see (nframes, ncells), transpose:
-```python
-if F.shape[0] > F.shape[1]:
-    F = F.T
-```
-
-### Jupyter Connection Issues
-If Jupyter won't connect:
-```bash
-# Kill any existing Jupyter processes
-pkill -f jupyter
-
-# Start fresh
-source .venv/bin/activate
-jupyter notebook --ip=0.0.0.0 --no-browser
-```
-
----
-
-## Helpful Resources
-
-### Reference Notebooks (Run These First)
-1. **`tutorials/day_1_core/simple_roi_detection.ipynb`** — Step-by-step ROI detection walkthrough
-2. **`tutorials/day_1_core/neuropil_correction_factor.ipynb`** — Interactive alpha optimization
-
-### Testing Your Code
-```bash
-# Run all tests
-pytest
-
-# Run one test file with verbose output
-pytest test_my_code.py -v
-
-# Run one specific test
-pytest test_my_code.py::test_correction_formula -v
-```
-
-### Useful Commands
-```bash
-# Monitor your job
-squeue -u $USER
-
-# Stop a Jupyter session gracefully
-pkill -f jupyter
-
-# Check available Python versions
-module avail python
-
-# List installed packages
-pip list
-
-# Deactivate your virtual environment
-deactivate
-```
-
----
-
-## Git Workflow Summary
-
-### First Time Setup
-```bash
-git config --global user.name "Your Name"
-git config --global user.email "your.email@bu.edu"
-```
-
-### Create Your Branch
-```bash
-git checkout -b my-day1-analysis
-```
-
-### Make Changes, Commit, Push
-```bash
-# Edit tutorials/day_1_core/simple_roi_detection.ipynb
-# ... do your analysis ...
-
-git add tutorials/day_1_core/
-git commit -m "Day 1: ROI detection + neuropil correction analysis"
-git push origin my-day1-analysis
-```
-
-### Create Pull Request
-On GitHub, click "Compare & pull request" and describe your analysis. Include:
-- Results summary (sensitivity, precision, optimal alpha)
-- Key findings (why simple methods fail, etc.)
-- Screenshots of plots
-
----
-
-## Questions?
-
-### Recommended Order:
-1. **Read this README** (you're here!)
-2. **Run `tutorials/day_1_core/simple_roi_detection.ipynb`** (see the problem)
-3. **Run `tutorials/day_1_core/neuropil_correction_factor.ipynb`** (see the solution)
-4. **Write your own code** in a notebook or script
-5. **Test your code** (pytest)
-6. **Commit and push** to your branch
-
-### If Stuck:
-- Check data path: `ls /projectnb/npcr25/shared/imaging_data/`
-- Review the reference notebook output
-- Ask Claude: "My correlations didn't decrease. What's wrong?"
-- Reach out to instructors on Slack
-
----
-
-## Getting Help with Claude
-
-You have **$500 of Claude API credit** for this exercise. Use it wisely:
-
-**Good questions for Claude:**
-- "I got shape mismatch (4535, 125) instead of (125, 4535). How do I transpose?"
-- "My correlation didn't decrease after correction. Here's my code: [paste]. What's wrong?"
-- "Explain neuropil correction in simple terms"
-- "How do I write a unit test for my correction function?"
-
-**Not ideal for Claude:**
-- "Do my homework" (Claude will help explain, but won't just write code)
-- Extremely long code dumps (paste 10-20 lines max)
-- Questions answerable by reading the notebooks (read first, then ask Claude if confused)
-
----
-
-## Citation
-
-If you use this exercise or dataset, please acknowledge:
-
-**Data**: Martin's lab, awake Thy1-jRGECO1a mice, layer 2 cortex, spontaneous activity, 15 Hz two-photon imaging
-
-**Exercise**: Agentic AI Coding for Neuroscience, Anthropic Summer School, 2026
-
----
-
-**Happy analyzing! 🧠📊**
