@@ -276,55 +276,123 @@ This is the raw data you'll be working with — images like these are where your
 
 ---
 
-## Exercise 1: Simple ROI Detection
+# The Exercises: Warmup → Main → Challenge
 
-### What You'll Learn
+This exercise has **three parts, designed to build from simple to complex**:
 
-Learn how neurons are detected in raw imaging data.
+1. **Exercise 1 (Warmup)**: Neuropil Removal — understand preprocessing
+2. **Exercise 2 (Main)**: Spike Deconvolution — solve the inverse problem
+3. **Exercise 3 (Challenge)**: ROI Detection — learn why deep learning matters
 
-**Your task**: 
-- Write a simple ROI detection algorithm (Gaussian smoothing + threshold + connected components)
-- Compare your results to Suite2p/Cellpose (professional deep learning pipeline)
-- Understand *why* simple methods fail and deep learning is necessary
-
-**Key finding**: Your simple algorithm finds 99 cells, but only 24 are real. Why? False positives in bright neuropil (2.4× brighter than real cells).
-
-**Expected output**:
-- Detection sensitivity: ~87.6%
-- Precision: ~23.2%
-- Why professionals use deep learning ✓
-
-### Milestones
-
-- [ ] Write ROI detection code (Gaussian + threshold + connected components)
-- [ ] Detect cells in the median image
-- [ ] Compare to Suite2p detection (`stat.npy`)
-- [ ] Measure sensitivity, precision, F1 score
-- [ ] Plot overlays showing false positives
-
-**Benchmark**: ~87% sensitivity, ~23% precision (simple method is limited—this is expected!)
-
-### Expected Results
-
-**What you should aim for:**
-
-![ROI Detection Comparison](assets/real_stage1_roi_detection.png)
-
-*Your simple algorithm (yellow circles) vs Suite2p (red circles). Note the false positives in bright neuropil — this is expected! Simple methods can't distinguish cells from bright background.*
-
-**Key observations:**
-- ~87% of Suite2p cells are detected (good coverage)
-- ~75% of your detections are false positives (expected limitation)
-- All false positives are in bright neuropil areas (explains why simple threshold fails)
-- Deep learning (Suite2p/Cellpose) works because it learns what real cells look like
+You can do all three (4 hours), or focus on Exercise 2 if time-limited (90 minutes).
 
 ---
 
-## Exercise 2: Spike Deconvolution (NNLS vs OASIS)
+## Exercise 1: Neuropil Removal (Warmup)
 
-### What You'll Learn
+### The Problem
 
-Learn to recover spike times from fluorescence using NNLS, validate on synthetic data, then apply to real data and compare to OASIS.
+When you image a neuron with two-photon microscopy, the fluorescence you measure comes from **two sources**:
+
+1. **The target cell body** — the neuron you want to study (signal)
+2. **Surrounding neuropil** — dendrites, glia, and nearby tissue outside your ROI (contamination)
+
+Your measured fluorescence is:
+
+$$F_{\text{obs}} = F_{\text{cell}} + \alpha_{\text{true}} \times F_{\text{neuropil}} + \text{noise}$$
+
+The contamination fraction $\alpha_{\text{true}}$ is typically 0.5–0.8, meaning **half to 80% of what you measure might not be from your target cell**. This corrupts spike detection and all downstream analysis.
+
+### The Existing Solution
+
+Suite2p measures neuropil fluorescence (`Fneu`) separately, then applies a standard correction factor $\alpha = 0.7$:
+
+$$F_{\text{corrected}} = F_{\text{obs}} - 0.7 \times F_{\text{neuropil}}$$
+
+This works on average, but **0.7 is not optimal for all datasets**. Cellular packing density, dye distribution, and optical properties vary, so the true optimal $\alpha$ can range from 0.5 to 0.9. Your task: **optimize α for your specific data**.
+
+### Your Goals
+
+1. **Implement** the correction algorithm: `F_corrected = F - alpha * Fneu`
+2. **Optimize** α by measuring three quality metrics across a range (0.2–1.2)
+3. **Validate** by plotting before/after and measuring correlation reduction
+4. **Understand** why dataset-specific correction beats one-size-fits-all
+
+### Deliverables
+
+- [ ] Load F and Fneu from real data
+- [ ] Loop over α ∈ [0.2, 1.2] and compute correlations, variance, Fano factor
+- [ ] Plot all three metrics vs α; identify the minimum
+- [ ] Visualize before/after correction on example cells
+- [ ] Document your optimal α and correlation reduction %
+
+**Benchmarks**:
+- Correlation reduction: ~89% (from r ≈ 0.7 to r ≈ 0.1)
+- Optimal α: ~0.547 ± 0.05
+- Corrected variance: 2–3× higher than raw
+
+### Expected Results
+
+![Neuropil Correction Before/After](assets/real_stage3_correction.png)
+
+*Top: raw fluorescence (contaminated, slow drift). Bottom: corrected (sharp, clean spikes visible).*
+
+![Correlation Analysis](assets/correlation_before_after.png)
+
+*Left: raw F vs Fneu highly correlated (contamination). Right: corrected F vs Fneu uncorrelated (contamination removed).*
+
+---
+
+## Exercise 2: Spike Deconvolution (Main)
+
+### The Problem
+
+Calcium indicators respond **slowly** to action potentials. A spike (1 ms depolarization) generates a fluorescence transient that rises over 10–100 ms and decays over 100–1000 ms. When neurons fire in bursts, responses overlap, making individual spikes invisible in the raw trace.
+
+The forward model: $$F(t) = \text{baseline} + \sum_{\text{spikes}} h(t - t_s) + \text{noise}$$
+
+Given observed $F(t)$, you must **invert** this to recover spike times.
+
+### The Existing Solution
+
+Suite2p uses **OASIS** — a fast exponential-filtering algorithm that:
+- Assumes exponential decay: $h(t) = \exp(-t/\tau)$ with $\tau \approx 400$ ms
+- Applies non-negative deconvolution with minimal sparsity
+- Runs in milliseconds per cell
+
+OASIS works empirically well but is a **heuristic**. Your task: **formulate and solve the inverse problem explicitly**.
+
+### Your Goals
+
+1. **Formulate** the problem as convex optimization: recover spikes that explain fluorescence
+2. **Validate** on synthetic data (you know ground truth)
+3. **Optimize** regularization and threshold parameters
+4. **Apply** to real data and compare against OASIS
+5. **(Optional)** Estimate kernel per-cell instead of using fixed global kernel
+
+### Deliverables
+
+**Synthetic Validation** (Parts A–C):
+- [ ] Generate ground-truth spike trains (Poisson, refractory period)
+- [ ] Convolve with calcium kernel, add realistic noise
+- [ ] Implement NNLS solver with λ regularization
+- [ ] Sweep λ ∈ [0.0001, 0.01] and threshold τ ∈ [0.01, 0.15]
+- [ ] Measure: sensitivity, precision, F1 vs ground truth
+- [ ] Plot recovered vs true spikes on example traces
+
+**Real Data** (Part D):
+- [ ] Apply NNLS to real fluorescence (subset: 20 cells × 1500 frames)
+- [ ] Load OASIS spikes (`spks.npy`) as reference
+- [ ] Define detection thresholds: OASIS > 0, NNLS > 0.1
+- [ ] Compute Jaccard Index: (both find) / (either finds)
+- [ ] Plot side-by-side comparison on low/medium/high activity cells
+- [ ] Document agreement % and disagreement patterns
+
+**Benchmarks**:
+- Synthetic: F1 ~0.78 (sensitivity 100%, precision ~65%)
+- Real data: Jaccard ~97% agreement with OASIS
+
+### Implementation Guide
 
 ### Part A: Generate Synthetic Data
 
@@ -485,6 +553,128 @@ The differences in spike shape reflect different optimization objectives, not pr
 - NNLS: $\min_s \|\mathbf{F} - \mathbf{h} \otimes \mathbf{s}\|_2^2 + \lambda \text{(smoothness)}$ (with regularization)
 
 **Your task**: Choose your thresholds, compute a metric for your NNLS results, and interpret whether NNLS is competitive with OASIS on this dataset.
+
+---
+
+## Advanced: Per-Cell Kernel Estimation (Exercise 2 Extension)
+
+### The Problem: Fixed vs. Adaptive Kernels
+
+In Parts A–D, we use a **global fixed kernel** $h(t) = \exp(-t/\tau)$ with $\tau \approx 400$ ms for all cells. This assumes all neurons have identical calcium indicator kinetics.
+
+In reality, indicator kinetics vary cell-to-cell due to:
+- Expression level differences
+- Indicator saturation (high-firing neurons)
+- Imaging depth (attenuation changes dye brightness)
+
+**The naive fix** — jointly learn the kernel and spikes together (CNMF-style alternation) — is non-convex and slow.
+
+**The smart fix** — estimate the kernel once per cell, then freeze it and solve NNLS:
+
+### The Insight: Autocovariance Recovers Decay
+
+Between spikes, the calcium trace follows an AR(1) model:
+
+$$c(t) = \gamma \, c(t-1) \quad \text{where} \quad \gamma = \exp(-1/\tau_{\text{decay}})$$
+
+The lag-1 autocovariance of the fluorescence trace directly yields $\gamma$:
+
+$$\hat{\gamma} = \frac{\text{Cov}(F_t, F_{t-1})}{\text{Var}(F_t)}$$
+
+Sparse spiking adds small bias (underestimates $\gamma$ by ~1–2% at realistic firing rates), but this is negligible for a fixed-kernel approximation.
+
+### Implementation
+
+**Step 1: Estimate γ per cell**
+
+```python
+def estimate_gamma(F, baseline_subtract=True):
+    """Quick AR(1) decay estimate via autocovariance ratio."""
+    F = F.astype(float)
+    if baseline_subtract:
+        F = F - np.median(F)
+    
+    F_centered = F - F.mean()
+    c0 = np.dot(F_centered, F_centered) / len(F)      # lag-0 (variance)
+    c1 = np.dot(F_centered[:-1], F_centered[1:]) / (len(F) - 1)  # lag-1
+    
+    gamma = c1 / c0
+    return np.clip(gamma, 0.5, 0.999)  # sanity bounds
+```
+
+**Step 2: Build cell-specific kernel and Toeplitz matrix**
+
+```python
+from scipy.linalg import toeplitz
+
+def build_kernel(gamma, n_frames):
+    """AR(1) decay kernel: h[t] = γ^t."""
+    h = gamma ** np.arange(n_frames)
+    return h
+
+def build_H(h, n_frames):
+    """Toeplitz convolution matrix."""
+    col = h[:n_frames]
+    row = np.zeros(n_frames)
+    row[0] = h[0]
+    return toeplitz(col, row)
+```
+
+**Step 3: Freeze kernel, solve NNLS**
+
+```python
+from scipy.optimize import nnls
+
+def deconvolve_per_cell(F, gamma):
+    """NNLS with estimated per-cell kernel."""
+    n = len(F)
+    h = build_kernel(gamma, n)
+    H = build_H(h, n)
+    s, _ = nnls(H, F - np.median(F))
+    return s
+```
+
+**Usage:**
+
+```python
+for cell_idx in range(n_cells):
+    F = F_good[cell_idx, :]
+    gamma_hat = estimate_gamma(F)      # estimate once per cell
+    s_hat = deconvolve_per_cell(F, gamma_hat)  # freeze kernel, solve
+```
+
+### Validation Plan
+
+1. **Synthetic validation**: Generate synthetic data with known τ_decay, run `estimate_gamma`, recover τ back from γ, and check accuracy across noise levels.
+
+2. **Benchmark F1 scores**: On synthetic Part C data, replace the fixed global kernel with per-cell estimated kernels. Re-run the λ/threshold sweep and confirm F1/sensitivity/precision still meet (~0.78 F1, 100% sensitivity, ~65% precision) — or characterize shifts.
+
+3. **Add L1 sparsity** (optional): Replace `nnls()` with `sklearn.linear_model.Lasso(positive=True, alpha=...)` to match the $\lambda\|\mathbf{s}\|_1$ term more faithfully. Re-tune λ range and compare false-positive rates.
+
+4. **Real data comparison**: Run on subset (20 cells × 1500 frames):
+   - Estimate γ per cell from real F
+   - Run NNLS with each cell's own frozen kernel
+   - Compare against OASIS using Jaccard index
+   - Check if per-cell kernels improve agreement over fixed global kernel
+
+5. **Stationarity check**: Estimate γ on first vs. second half of a few traces. Flag cells with unstable γ (motion artifacts, low SNR) before trusting output.
+
+6. **Scale up**: Replace dense Toeplitz $\mathbf{H}$ with sparse banded matrix (e.g., `scipy.sparse.diags`) before running full 125 cells × 4535 frames.
+
+### Expected Outcome
+
+Per-cell kernel estimation should:
+- **Improve or maintain Jaccard agreement** with OASIS (likely neutral to small positive effect)
+- **Reduce per-cell variance** in deconvolution quality (better predictions for cells with unusual kinetics)
+- **Enable detection of kinetic outliers** (cells with unusual γ, suggesting technical issues)
+
+### Known Gaps
+
+- **No joint optimization**: This assumes kinetics are stationary within the trace (true for 5–10 min recordings, worth spot-checking).
+- **Dense matrix cost**: $\mathbf{H}$ is $n_{\text{frames}} \times n_{\text{frames}}$ — fine for subsets, slow for full 4535 frames. Sparsity fixes this.
+- **L1 vs. thresholding**: Pure NNLS has no L1 penalty; post-hoc thresholding is ad-hoc. Lasso would be cleaner but slower.
+
+---
 
 ### The Generative Model (Forward Problem)
 
@@ -665,21 +855,54 @@ where threshold is typically:
 
 ---
 
-## Exercise 3: Neuropil Removal
+## Exercise 3: ROI Detection (Challenge)
 
-### What You'll Learn
+### The Problem
 
-Learn to remove contamination from neural signals by finding the optimal correction factor.
+Before analyzing a neuron, you must **find it** in raw imaging data. The challenge:
 
-**Your task**:
-- Load corrected fluorescence: `F_corrected = F - α × Fneu`
-- Test different correction factors (α = 0.2 to 1.2)
-- Find the optimal factor for *your* dataset using three quality metrics:
-  - F vs Fneu correlation
-  - Signal variance
-  - Fano factor (spike-to-spike variability)
+1. **Neurons are small** (~20–40 μm, but pixels are ~0.37 μm)
+2. **Neuropil is bright** — sometimes brighter than cell bodies
+3. **Noise everywhere** — shot noise, autofluorescence, motion
+4. **Cells overlap** — dendrites cross, tissue is dense
 
-**Key finding**: Standard literature value is α = 0.7, but it's not optimal for all datasets. For this dataset, optimal is α ≈ 0.547 (21.9% lower than standard).
+A simple approach (threshold + connected components) will:
+- Catch most neurons (sensitivity ~88%)
+- Generate many false positives (precision ~23%)
+- **Teach you why deep learning is necessary**
+
+### The Existing Solution
+
+Suite2p uses:
+1. **Statistical filtering** on mean image with morphological constraints
+2. **Deep learning via Cellpose** — a convolutional network trained on thousands of labeled neurons
+
+Cellpose achieves ~95% sensitivity and ~95% precision by learning what "real cells" look like. Simple thresholding can't distinguish cells from noise.
+
+### Your Goals
+
+1. **Implement** a simple ROI detector to understand the baseline
+2. **Measure** sensitivity and precision vs Suite2p ground truth
+3. **Analyze** false positives: where and why do they occur?
+4. **Understand** the limitation: why deep learning wins where simple methods fail
+
+### Deliverables
+
+- [ ] Load raw imaging data (mean or std across time)
+- [ ] Implement: Gaussian smooth → threshold → connected components
+- [ ] Extract ROI properties: center, size, circularity, brightness
+- [ ] Compare to Suite2p detected ROIs (`stat.npy`)
+- [ ] Compute sensitivity, precision, F1 metrics
+- [ ] Visualize: your detections vs Suite2p on the image
+- [ ] Analyze false positives: spatial distribution, size/brightness histograms
+- [ ] Document: why does simple thresholding fail?
+
+**Benchmarks**:
+- Sensitivity: ~87.6% (detect most real neurons)
+- Precision: ~23.2% (most detections are false positives)
+- False positives: concentrated in bright neuropil and motion artifacts
+
+### Expected Analysis
 
 ### Mathematical Underpinnings
 
