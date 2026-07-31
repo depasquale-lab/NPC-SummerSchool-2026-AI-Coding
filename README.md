@@ -61,12 +61,11 @@ You'll write **three data-processing pipelines**, each solving one piece of the 
 
 **Exercise 2: Spike Deconvolution** (Main)
 - **Input**: Corrected fluorescence from Exercise 1
-- **Output**: Spike times recovered via L1-regularized deconvolution, using a per-cell calcium kernel
+- **Output**: Spike times recovered from fluorescence, using a calcium kernel timescale you estimate for each cell
 - **What you'll learn**:
-  - Part A: Formulate the inverse problem mathematically on synthetic data (you know ground truth)
-  - Part B: Estimate the calcium decay constant τ per-cell using autocovariance, instead of assuming one fixed value for every cell
-  - Part C: Apply the deconvolution with per-cell kernels to real neurons; compare against Suite2p's spike inference
-- **Key insight**: Suite2p was run with a single fixed τ = 1.0s for every cell in this dataset. Real neurons vary — this exercise estimates τ directly from each cell's own data instead.
+  - First, on data you generate yourself: create a fluorescence trace from a spike train with a known timing, then recover it — so you can check whether your method actually works before trusting it on real neurons
+  - Then, on real neurons: estimate each cell's own calcium decay time, recover its spikes, and compare against Suite2p's spike inference
+- **Key insight**: Suite2p was run with a single fixed decay timescale for every cell in this dataset. Real neurons vary — this exercise estimates that timescale directly from each cell's own data instead.
 - **Real-world parallel**: This is the core of calcium-imaging analysis. Getting spikes right determines everything downstream.
 
 **Exercise 3: ROI Detection** (Challenge)
@@ -88,15 +87,13 @@ You'll have **three working analysis pipelines**, each self-contained:
 
 ## Quick Start: Get Set Up on SCC
 
-### Step 1: Access the SCC via OnDemand
+### Step 1: Access the SCC and Launch VS Code Server
 
 ⚠️ **Browser requirement**: Use **Chrome** or **Safari** for best compatibility with OnDemand and VS Code Server.
 
 Go to: [https://scc-ondemand2.bu.edu/](https://scc-ondemand2.bu.edu/)
 
 Log in with your BU username/password. This opens a web-based interface — no terminal needed.
-
-### Step 1b: Launch VS Code Server Interactive App
 
 Once logged in to OnDemand:
 
@@ -122,9 +119,9 @@ Once logged in to OnDemand:
 
 ---
 
-## Set Up Cline + Gemini AI (Required)
+### Step 2: Set Up an AI Coding Assistant
 
-**Cline** is your AI coding assistant. You'll use it throughout the exercise to debug code, explain concepts, and get help. (Already comfortable with another AI tool — Claude, ChatGPT, etc.? You're welcome to use that instead; the setup below is just the default path.)
+**Cline + Gemini** is the default path below, and what the rest of this guide assumes you're using. Already comfortable with another AI tool — Claude, ChatGPT, etc.? You're welcome to use that instead; skip to Step 3.
 
 ### Installation Steps
 
@@ -156,7 +153,7 @@ If you run out:
 
 ---
 
-## Step 2: Clone This Repository (via Cline)
+### Step 3: Clone This Repository (via Cline)
 
 Now that Cline is installed, use it to clone the repo.
 
@@ -184,7 +181,7 @@ Pushing after each exercise ensures your work is backed up and instructors can s
 
 ---
 
-## Step 3: Set Up Python Environment (via Cline)
+### Step 4: Set Up Python Environment (via Cline)
 
 Now that Cline is installed, use it to set up your Python environment.
 
