@@ -82,7 +82,7 @@ You'll have **three working data-processing pipelines**, each self-contained:
 - Code that takes raw imaging → cleaned spikes (the full pipeline)
 - Detailed understanding of *why* each step exists (not just "we do it because papers do")
 - Quantitative benchmarks showing how your methods compare to the standard (Suite2p)
-- Intuition about the tradeoffs in algorithm design (speed vs. accuracy, sensitivity vs. specificity)
+- Intuition about the tradeoffs in algorithm design (speed vs. accuracy, sensitivity vs. precision)
 - Hands-on experience with numerical optimization, inverse problems, and data validation — skills that transfer to any data science problem
 
 ---
@@ -467,6 +467,8 @@ Calcium indicators respond **slowly** to spikes. A single spike (~1 ms) triggers
 
 $$F(t) = \text{baseline} + \sum_{\text{spikes}} h(t - t_s) + \text{noise}, \qquad h(t) = \exp(-t/\tau)$$
 
+This is written for **one neuron's trace at a time** — $F$, $s$, and $H$ below all describe a single cell. You'll solve this inverse problem separately for every cell, each with its own kernel; it's never one large joint problem across every cell in the recording at once. (Even Suite2p's own OASIS call, which batches every cell's trace into a single function invocation for speed, still deconvolves each cell's trace independently — the only thing shared across cells there is the one fixed τ, not the deconvolution itself.)
+
 Given the observed $F(t)$, you must **invert** this to recover the spike times — concretely, minimize $\frac{1}{2n}\|F - Hs\|_2^2 + \lambda\|s\|_1$ subject to $s \geq 0$, where $H$ is the Toeplitz convolution matrix built from the kernel.
 
 **One clarification worth making explicit now, because it shapes everything downstream**: neither Suite2p's OASIS nor the method you'll build actually outputs a "spike happened here: yes/no" signal. What comes out — Suite2p's `spks.npy`, and your own recovered $s$ — is a continuous **spike amplitude** at every frame: a number meant to represent roughly how much spiking activity contributed to that frame, not a discrete event. It can be exactly zero (no activity), small (a little residual uncertainty about where a nearby spike's mass belongs), or large (one spike, or several spikes close enough together to blend into one frame). This is exactly why you'll need an *extra* step (finding peaks in that continuous output) to get discrete spike times out of it — the raw deconvolution doesn't hand you events, it hands you a curve you still have to interpret. It's also why Deliverable 2 compares your output and Suite2p's output by *correlating two continuous traces* rather than counting matched discrete events: both are estimates of the same underlying continuous quantity, not two lists of binary spikes to line up.
@@ -476,6 +478,8 @@ Given the observed $F(t)$, you must **invert** this to recover the spike times �
 ### The Existing Solution
 
 Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/deconvolution/)), assumes exponential decay and runs non-negative deconvolution in milliseconds per cell. Its own function signature is `dcnv.oasis(F=Fc, batch_size=batch_size, tau=tau, fs=fs)` — `F` there is the *entire array of traces for every cell in the recording*, and `tau` is passed once, as a single scalar, for that whole call. It's a global setting for the recording, not something computed per cell. This dataset's own saved processing settings confirm it was actually run with **one fixed τ = 1.0s for every cell** — a simplification, since real neurons don't all share identical calcium kinetics.
+
+**This isn't a problem unique to Suite2p, or invented for this exercise.** The other major calcium-imaging pipeline, **CNMF** ([Pnevmatikakis et al.](https://github.com/epnev/constrained-foopsi), implemented in [CaImAn](https://caiman.readthedocs.io/en/latest/core_functions.html)), solves essentially the same inverse problem in its `constrained_foopsi` deconvolution step: minimize total spike mass (a sparsity-promoting objective, the same role your L1 penalty plays), subject to non-negativity and the reconstruction fitting the trace within its noise level. OASIS was originally developed as a much faster, *exact* solver for that same constrained problem, before Suite2p adopted it as its default. So the inverse problem you're solving by hand in this exercise isn't a simplified toy version of something real methods do differently — it's the actual mathematical core that both major pipelines (Suite2p and CNMF/CaImAn) build their spike inference around. OASIS and your Lasso solver are two different algorithms for solving that same problem, not two different problems.
 
 **Why not just reimplement OASIS?** OASIS is a specialized, carefully optimized algorithm from its own dedicated research codebase — reproducing it exactly is a substantial engineering project on its own, not what this exercise is asking of you. Instead, you'll solve the *same underlying inverse problem* — recover spikes from a blurred fluorescence trace — with a simpler, more general tool (L1-regularized least squares) that you can build from first principles. That's the point: understanding the problem OASIS solves and building a working (if less polished) solution yourself, not reproducing OASIS's internals.
 
@@ -548,52 +552,56 @@ Then compare against Suite2p's spike inference (`spks.npy`) — but **not** with
 
 ## Exercise 3: ROI Detection (Challenge)
 
+Exercise 1 and Exercise 2 both started from cells Suite2p had *already found* — you were handed a per-cell fluorescence trace and asked to clean it up or decode it. This exercise asks the question that comes before either of those: how did Suite2p know where those 125 cells were in a 1024×1024 grid of noisy grayscale video in the first place? Finding a neuron turns out to be its own hard problem, worth an exercise of its own, and — as you'll see — the way Suite2p actually solves it looks nothing like "look at a picture and spot the round blobs."
+
 ### The Problem
 
-Before analyzing a neuron, you must **find it** in the raw imaging data. The challenge:
+Before analyzing a neuron, you must **find it** in the raw imaging data. Four things make that hard:
 
 1. **Neurons are small** (~10–15 μm in this dataset, but pixels are ~0.4 μm)
 2. **Neuropil is bright** — sometimes brighter than cell bodies
 3. **Noise is everywhere** — shot noise, autofluorescence, motion artifacts
 4. **Cells overlap** — dendrites cross, tissue is densely packed
 
-### The Existing Solution
+### The Existing Solution, and How Your Task Differs From It
 
-Suite2p's default detector (**Sparsery**, [docs](https://suite2p.readthedocs.io/en/latest/roidetection/)) doesn't just look at one static image — it decomposes the whole movie, searching for sources that are spatially compact *and* temporally sparse (active in only a fraction of frames). That's fundamentally more information than a single mean image contains: a real cell's pixels light up and dim together over time in a way that matches its own activity, while bright neuropil regions may be steady, diffuse, or driven by a different (shared, population-wide) timecourse.
+Suite2p's default detector (**Sparsery**, [docs](https://suite2p.readthedocs.io/en/latest/roidetection/)) doesn't look at a picture at all, in the sense you might expect — it decomposes the *whole movie* (thousands of frames), searching directly for sources that are spatially compact *and* temporally sparse (active in only a fraction of frames). Concretely: a real cell's pixels rise and fall together over time, in a pattern that's specific to that cell's own activity, while a bright patch of neuropil tends to be steady, diffuse, or driven by some shared, population-wide timecourse instead. Sparsery is looking for *that distinction* — a signature that only exists across time — not for "which pixels are bright."
 
-**Why not just reimplement Sparsery?** Sparsery is an iterative matrix-decomposition algorithm — a real software engineering project on its own, well beyond what a single exercise can ask of you. This exercise has a different goal: build the *simplest possible* baseline (threshold + connected components) and measure exactly how much you lose by ignoring the movie's temporal structure. Seeing that gap firsthand is what motivates why a more sophisticated, movie-aware method like Sparsery exists in the first place — you don't need to build Sparsery to understand why it's necessary.
+A single averaged image necessarily throws that signature away: once you've averaged 4535 frames down to one, there's no way to recover which pixels rose and fell together and which didn't. **This is the core way your task differs from Suite2p's**: you'll be working from exactly the kind of single static image Sparsery deliberately avoids relying on, so you'll get to measure, with real numbers, how much that costs you.
 
-In this exercise, you'll build something much simpler — a detector that only looks at **one static image** (the time-averaged fluorescence) — and see how much performance that costs you.
+**Why not just reimplement Sparsery instead of a simpler baseline?** It's an iterative matrix-decomposition algorithm — a real software engineering project on its own, well beyond what a single exercise can ask of you.
+
+**Your task**: build the *simplest possible* baseline — threshold a single static image, then group the surviving pixels into candidate cells — and measure exactly how much performance you lose by ignoring the movie's temporal structure entirely. Seeing that gap firsthand, with real numbers, is what motivates why a more sophisticated, movie-aware method like Sparsery exists in the first place.
 
 💬 If it's not intuitive why "the whole movie" is more informative than "a picture of the average," ask Cline for an example of two things that would look identical in a time-averaged image but obviously different if you watched them over time — that's the exact gap this exercise is measuring.
 
 ### Deliverable 1 — Detect and Match by Position
 
-**Data**: Use all 125 of Suite2p's detected ROIs (`stat.npy`) as your ground truth, not just the 113 good-quality ones — the benchmark numbers below include the lower-confidence detections too.
+**Goal**: detect cells from the static mean image alone, match them against Suite2p's own ROIs by position, and report sensitivity (what fraction of real cells did you find?) and precision (what fraction of your detections are real?). Then look at where your false positives and false negatives cluster, and figure out why.
 
-Detect cells from the static mean image alone (smooth → threshold → connected components), match your detections against Suite2p's ROI centers by pixel distance, and report sensitivity and precision. Then look at your false positives and false negatives: where do they cluster, and why?
+**Data**: Use all 125 of Suite2p's detected ROIs (`stat.npy`) as your ground truth, not just the 113 good-quality ones — the benchmark numbers below include the lower-confidence detections too. Use `ops['meanImg']` (from `ops.npy`) for the image — **not** `F.mean(axis=1)`, which gives one number per already-detected cell, not a spatial image at all.
 
-⚠️ Use `ops['meanImg']` (from `ops.npy`) for the image — **not** `F.mean(axis=1)`, which gives one number per already-detected cell, not a spatial image at all.
+**Scaffolding** — the concrete shape of "smooth → threshold → connected components → match":
 
-**Scaffolding for the detector** — the concrete shape of "smooth → threshold → connected components":
-
-1. Smooth the mean image lightly: `scipy.ndimage.gaussian_filter(mean_img, sigma=~0.7)`. This isn't optional cosmetic smoothing — it merges single-pixel noise specks into the shape of the blob they're part of, before you threshold.
+1. Smooth the mean image lightly: `scipy.ndimage.gaussian_filter(mean_img, sigma=~0.7)`. This merges single-pixel noise specks into the shape of the blob they're part of, before you threshold.
 2. Pick a threshold as a percentile of the smoothed image's pixel values (`np.percentile(smoothed, p)`), not a fixed count — raw brightness varies a lot by dataset, but "top X% of pixels" is comparable across datasets. Start high (try 95–99); the intuitive "80th percentile" choice lets in far more diffuse neuropil than you'd expect.
-3. Threshold to get a binary mask: `binary = smoothed > threshold`.
-4. Label connected regions of that mask: `labeled, n = scipy.ndimage.label(binary)`. Each labeled region is one candidate detection.
-5. For each labeled region, compute its pixel count and its centroid (mean of its pixel coordinates). Keep only regions whose pixel count falls in a range matching real cell sizes — this dataset's own ROIs span 31–1173 pixels, so a bare `> 10` floor keeps far too much noise and neuropil debris.
-6. For each surviving centroid, find the nearest Suite2p ROI center (from `stat[i]['med']`) and call it a match if the distance is under some threshold (e.g. 30 pixels ≈ 12 μm). Count matches, your unmatched detections (false positives), and unmatched Suite2p ROIs (false negatives) to get sensitivity and precision.
+3. Threshold to a binary mask (`binary = smoothed > threshold`), then label connected regions: `labeled, n = scipy.ndimage.label(binary)`. Each labeled region is one candidate detection.
+4. For each region, compute its pixel count and centroid. Keep only regions whose size falls in a range matching real cell sizes — this dataset's own ROIs span 31–1173 pixels, so a bare `> 10` floor keeps far too much noise and neuropil debris.
+5. Match each surviving centroid to the nearest Suite2p ROI center (`stat[i]['med']`), within some distance (e.g. 30 pixels ≈ 12 μm).
+
+⚠️ **Step 5's matching needs to be one-to-one, or your sensitivity will be silently wrong.** If you match "independently per detection" — for each detection, just grab whichever Suite2p ROI is nearest — nothing stops two different detections from both claiming the *same* real cell (common when one bright blob's threshold mask isn't quite connected, so it splits into two separate components). Every such duplicate inflates your matched count without you having actually found any additional real cell. The fix: build a list of every (detection, Suite2p ROI) pair within the distance threshold, sort by distance, and assign the closest pairs first — once a detection or a Suite2p ROI is claimed, remove it from the pool so nothing can claim it twice.
 
 💬 If you're not sure what a "connected component" actually is, ask Cline to visualize a toy 10×10 binary grid with a couple of blobs on it, run `scipy.ndimage.label` on it, and show you the resulting labeled array — much more concrete than the general idea of "grouping touching pixels."
 
 💬 If your sensitivity/precision look nowhere close to the numbers below (e.g. both near 0%), that's usually a sign something upstream is off — wrong image, wrong coordinate order, or a threshold that's degenerate. Describe your numbers to Cline and it can help you narrow down where.
 
-**Tuning tip**: a loose threshold (e.g. the 80th percentile) lets huge swaths of diffuse neuropil through alongside real cells, and a bare `size > 10 pixels` filter keeps tiny noise specks. Two changes make a real difference without adding any new method: (1) push the threshold much higher — only the brightest ~1% of pixels reliably separates cell bodies from neuropil background in this dataset — and (2) filter components by a size range matching real cells (this dataset's own ROIs span 31–1173 pixels), not just a low floor.
+**Results should look something like this** (this dataset, with one-to-one matching):
+- With a loose 80th-percentile threshold and a bare `size > 10` filter: sensitivity **28.8%**, precision **19.5%**
+- With a 99th-percentile threshold and a size filter matching real cell dimensions (20–1500 pixels): sensitivity **29.6%**, precision **39.8%**
+- Tuning roughly **doubled precision** (19.5% → 39.8%) but left **sensitivity essentially flat** (28.8% → 29.6%). That asymmetry makes sense once you know why: raising the threshold only ever *removes* detections, so it can stop you mistaking neuropil for cells, but it can never rescue a real cell that was already too dim to cross the cutoff. Tuning fixes precision problems; it can't fix sensitivity problems caused by dim real cells.
+- Even tuned, this remains well below Suite2p's Sparsery
 
-**Results should look something like this** (this dataset):
-- With an 80th-percentile threshold and a bare `size > 10` filter: sensitivity **42.4%**, precision **33.5%**
-- With a 99th-percentile threshold and a size filter matching real cell dimensions (20–1500 pixels): sensitivity **51.2%**, precision **68.8%** — a substantial improvement from tuning the same simple method, not a different algorithm
-- Even tuned, this remains well below Suite2p's Sparsery — a single static image still doesn't contain enough information to separate cells from bright neuropil as reliably as a movie-aware method can
+**Where do the errors cluster, and why?** In this dataset there's a real, measurable answer: the field of view is not evenly lit — one half is substantially brighter than the other (ordinary 2p vignetting, not biology). A single global threshold is calibrated to the *whole* image's brightness, so false positives cluster heavily in the brighter half (ordinary background there is already bright enough to cross a cutoff meant for cell bodies), while missed cells are, on average, measurably dimmer at their center than found cells — independent of where they sit. Check this in your own data: split the image in half, compare mean brightness, and check whether your false positives/negatives split unevenly across that line.
 
 ### Deliverable 2 — Does "Matched" Mean "Same Signal"?
 
@@ -601,17 +609,17 @@ Position-matching only checks whether your detection's *center* landed near a Su
 
 **Method**: For every matched pair from Deliverable 1, pull your detection's own raw pixel-averaged trace directly from the movie (`ops.npy`'s registered TIFF, not anything Suite2p precomputed), and correlate it against Suite2p's own `F` trace for that same cell. Then look at a few of your best- and worst-correlated matches side by side — both the image (do the two ROI outlines actually overlap?) and the traces (do they move together?).
 
-**Results should look something like this** (this dataset, using the tuned detector from Deliverable 1):
-- Across the 64 matched pairs: mean correlation **0.48**, median **0.43**, range **[0.10, 0.93]**
-- 28 of 64 matches (44%) have correlation > 0.5 — genuinely capturing the same signal
-- 10 of 64 matches (16%) have correlation < 0.2 — spatially "close enough" but not the same signal
-- Better detection (Deliverable 1's tuning) didn't just find more matches — it found *better* ones: both the fraction of high-correlation matches and low-correlation matches improved. Looking at the remaining poor matches, the two ROI outlines are often still visibly non-overlapping — the 30-pixel matching threshold is loose enough to count some clearly-different blobs as a "match"
+**Results should look something like this** (this dataset, using the tuned detector and one-to-one matches from Deliverable 1):
+- Across the 37 matched pairs: mean correlation **0.57**, median **0.56**, range **[0.17, 0.93]**
+- 23 of 37 matches (62%) have correlation > 0.5 — genuinely capturing the same signal
+- 2 of 37 matches (5%) have correlation < 0.2 — spatially "close enough" but not the same signal
+- Most position-matches do hold up as real signal matches, but a meaningful minority don't — sensitivity and precision alone would never have told you that
 
 ### What Your Results Might Look Like
 
 ![ROI detection comparison](assets/exercise3_roi_detection_results.png)
 
-*Left: the raw mean fluorescence image. Middle: the smoothed threshold mask. Right: your detections (yellow) overlaid on Suite2p's ROI positions (cyan) — note the mismatches in both directions.*
+*Left: the raw mean fluorescence image. Middle: the smoothed threshold mask — notice it's not spread evenly across the image. Right: every Suite2p ROI and detection, color-coded by outcome (green = matched, magenta = missed/false negative, red = false positive) — the errors cluster visibly in the brighter half of the image, exactly matching the illumination-gradient explanation above.*
 
 ![Match quality: good vs. poor correlation examples](assets/exercise3_match_quality_examples.png)
 
@@ -622,10 +630,11 @@ Position-matching only checks whether your detection's *center* landed near a Su
 ### What You'll Discover
 
 After implementing a simple detector, you'll see:
-1. **You miss a substantial fraction of real cells** — a single mean image doesn't separate all cells from background as cleanly as you'd hope
-2. **A large share of your detections are false positives** — bright neuropil regions and imaging artifacts pass the same threshold real cells do
-3. **Static brightness alone is a weak signal**: some real cells aren't much brighter than their surroundings in the time-averaged image, even though they are clearly active over time
-4. **"Correct" isn't binary**: even among your position-matched "true positives," some have essentially no signal agreement with the cell they supposedly matched — sensitivity and precision alone hide this
-5. **Why Suite2p's default beats this**: by using the whole movie (not one static image), Suite2p can distinguish sources based on *when* they're active, not just how bright they are on average — information a single-image threshold simply doesn't have access to
+1. **You miss most real cells** — a single mean image doesn't separate cells from background nearly as cleanly as you'd hope
+2. **Most of your detections are false positives** — bright neuropil regions and imaging artifacts pass the same threshold real cells do, and tuning only partly fixes this
+3. **The errors aren't random — a specific, fixable cause explains a real chunk of them**: uneven illumination across the field of view means a single global threshold behaves inconsistently from one region to another
+4. **But a deeper cause remains no matter how well you tune**: some real cells simply aren't much brighter than their surroundings in *any* single frame, even though they're clearly active over time — a static image cannot see activity, only brightness
+5. **"Correct" isn't binary**: even among your position-matched "true positives," some have essentially no signal agreement with the cell they supposedly matched — sensitivity and precision alone hide this
+6. **Why Suite2p's default beats this**: by using the whole movie (not one static image), Suite2p can distinguish sources based on *when* they're active, not just how bright they are on average — information a single-image threshold simply doesn't have access to, no matter how it's tuned
 
-This teaches you: **the information you throw away (here, all of the movie's temporal structure) often matters more than the algorithm you use on what's left — and a metric that only checks position can hide exactly how much you're missing.**
+This teaches you: **not every gap between a simple method and the real pipeline has the same cause. Some of it is a fixable weakness in your simple method (here, a global threshold's blindness to uneven illumination); the rest is a fundamental information gap (here, a static image discarding all temporal structure) that no amount of tuning on a single image can ever close. Telling those two apart — instead of lumping every shortfall into "needs a better algorithm" — is the actual skill this exercise is teaching.**
