@@ -277,7 +277,7 @@ That raw video has already been run through **Suite2p** (see below) to produce t
 **Recording specs**:
 - **Source**: Awake Thy1-jRGECO1a mouse, layer 2 cortex, spontaneous activity
 - **125 neurons** × 4535 frames (5.04 minutes @ 15 Hz)
-- **90% good quality** (113 cells passing iscell ≥ 0.15 threshold)
+- **90% good quality** (113 cells with `iscell[:, 0] == 1`)
 - **Cell size**: detected cell bodies are ~10–15 μm in diameter (measured from this dataset's own ROIs); pixels are ~0.4 μm
 - **Well-characterized**: diverse cell types and firing rates
 
@@ -317,9 +317,10 @@ The result is a folder full of `.npy` files containing all the processed data.
 
 **`iscell.npy`** — **Cell quality scores**
 - Shape: 125 cells × 2 columns
-- Contains: A quality-of-detection index assigned to every ROI by Suite2p's built-in classifier (column 0: quality score, column 1: predicted class label)
-- Threshold: Use iscell[:, 0] >= 0.15 to filter for likely "real cells" and exclude artifacts
-- Why you need it: Not all detected ROIs are real neurons. Some are neuropil artifacts or background noise. This quality score helps you distinguish real cells from false detections. At threshold 0.15, you keep ~90% of the 125 cells.
+- ✅ Contains: **column 0 is the final binary cell/not-cell decision** (0 or 1 — verified: this dataset's column 0 has only these two values), and **column 1 is Suite2p's underlying continuous classifier probability** that the ROI is a real cell — not the other way around, which is a common mix-up.
+- Threshold: Use `iscell[:, 0] == 1` to filter for the 113 ROIs treated as real cells throughout this README. (You'll sometimes see this written as `iscell[:, 0] >= 0.15` — mathematically identical since column 0 only ever takes the values 0 or 1, but write `== 1` if you want the intent to be unambiguous.)
+- ⚠️ Column 0 here is **not** simply "column 1 thresholded at 0.5": 113 ROIs have `iscell[:, 0] == 1`, but only 93 have `iscell[:, 1] >= 0.5` — the two disagree on 20 ROIs. That gap is consistent with column 0 reflecting a human's final call (likely adjusted from the raw classifier during curation), not just the automated probability. Column 0 is the one used as ground truth throughout every exercise in this README.
+- Why you need it: Not all detected ROIs are real neurons. Some are neuropil artifacts or background noise. Column 0 is how you distinguish real cells from false detections. At this dataset's actual curated cutoff, you keep 113 of 125 cells (90.4%).
 
 **`spks.npy`** — **Suite2p's spike inference** (the reference you'll compare against)
 - Shape: 125 cells × 4535 frames
@@ -368,8 +369,8 @@ ops = np.load(run_dir / 'ops.npy', allow_pickle=True).item()  # dict — run con
 spks_dir = Path('/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes')
 spks = np.load(spks_dir / 'TSeries-03042024-run02-054' / 'spks.npy')  # (125, 4535)
 
-# Filter by quality (iscell ≥ 0.15)
-good_cells = iscell[:, 0] >= 0.15
+# Filter by quality (column 0 is the binary cell/not-cell decision)
+good_cells = iscell[:, 0] == 1
 F_good = F[good_cells, :]
 Fneu_good = Fneu[good_cells, :]
 
@@ -460,7 +461,11 @@ $$F_{\text{corrected}} = F_{\text{obs}} - 0.7 \times F_{\text{neuropil}}$$
 
 ### Deliverable
 
-Apply `F_corrected = F - 0.7 * Fneu` to the good-quality cells (`iscell ≥ 0.15`), then show it worked: report the correlation between F and Fneu before vs. after correction, and plot a few example cells.
+Apply `F_corrected = F - 0.7 * Fneu` to the good-quality cells (`iscell[:, 0] == 1`), then show it worked.
+
+**What "showing it worked" actually means here**: for each cell, you have two time series — its own fluorescence and its neuropil estimate. If contamination is real, those two should rise and fall together, since the same neuropil brightness is leaking into both — so *before* correction, `F` and `Fneu` should be correlated over time. That correlation is a direct, checkable proxy for "how much of this cell's trace is actually just neuropil bleeding through," not a measurement of anything biological. Compute the Pearson correlation between `F[i]` and `Fneu[i]` for each cell, do the same between `F_corrected[i]` and `Fneu[i]`, and average each set across cells — the correction "worked" exactly to the extent that average correlation drops.
+
+Report the correlation between F and Fneu before vs. after correction, and plot a few example cells.
 
 ⚠️ Compute the correlation **per cell, then average** — not by pooling every cell's data into one big correlation. Pooling mixes in brightness differences *between* cells (which the correction can't fix) and makes the contamination look worse than it is.
 
