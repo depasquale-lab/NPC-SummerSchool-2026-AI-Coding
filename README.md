@@ -210,7 +210,7 @@ Cline will execute these commands for you. You should see `(.venv)` in your term
 │   ├── README.md                        ← This guide
 │   └── assets/                          ← Images (GIFs, PNGs)
 │
-├── tutorials/day_1_core/                ← YOU CREATE with Cline
+├── tutorials/friday_exercises/           ← YOU CREATE with Cline
 │   ├── step_0_data_exploration.ipynb
 │   ├── exercise_1_neuropil_correction.ipynb
 │   ├── exercise_2_spike_deconvolution.ipynb
@@ -294,7 +294,7 @@ The result is a folder full of `.npy` files containing all the processed data.
 - What it is: Spike amplitudes recovered by Suite2p's OASIS-based spike inference algorithm, run with a single fixed calcium timescale (τ = 1.0s) for every cell
 - Range: 0–1543. Note this is **not** a sparse 0/1 spike train — many frames have small nonzero values, so a raw ">0" threshold captures far more than just "obvious" spike events. Comparing against it requires peak-detection, not simple thresholding.
 - Why you need it: This is your benchmark. After you implement deconvolution in Exercise 2, you'll compare your spike detections against this reference.
-- **Location note**: These spikes are stored in a separate directory: `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes/TSeries-03042024-run02-054/spks.npy`.
+- ⚠️ **Location note (important, easy to get wrong)**: There's also a `spks.npy` sitting right next to `F.npy` in the processed directory — but that one is **all zeros** (confirmed: same shape, 125×4535, every value 0). The real spike inference you want is in a separate directory: `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes/TSeries-03042024-run02-054/spks.npy`. If your comparison in Exercise 2 looks completely broken, check you didn't accidentally load the zeroed-out copy.
 
 **`stat.npy`** — **ROI metadata**
 - Shape: 125 cells
@@ -370,9 +370,13 @@ You can do all three, or focus on Exercise 2 for depth.
 
 ## Step 0: Look at the Data First
 
-Before Exercise 1, just load the files and look at them — no analysis, nothing to get "right."
+Right now, everything you know about this dataset is secondhand — you've read descriptions of what F.npy contains, what a neuropil mask is, what Suite2p's ROIs look like, but you haven't actually opened a single file yourself. That gap matters: the exercises ahead ask you to reason about correlations dropping, spikes overlapping, detections missing — and it's much easier to reason about those things once you've seen what the raw material actually looks like with your own eyes, rather than trusting a description of it.
+
+So before Exercise 1, take a few minutes to just load the files and look at them. There's nothing to get "right" here — no metric, no benchmark, no deliverable to score. The point is purely to get oriented: to see that a "cell" in this dataset is a noisy, wandering trace rather than a clean signal, and that the "picture" Suite2p worked from is a grainy, speckled field of view where the cells aren't even obviously the brightest thing in frame. Once you've seen that, the problems the three exercises are solving will make a lot more intuitive sense, and you'll have a mental picture to check your own results against as you go.
 
 **Deliverable**: Load `F`, `Fneu`, and `ops['meanImg']`. Plot a few raw fluorescence traces over time, and plot the mean image with cell locations marked (from `stat`, the `med` field).
+
+💬 Not sure how to load an `.npy` file, or what `ops['meanImg']` even is? Ask Cline — that's exactly what it's there for.
 
 **What you should see**:
 
@@ -380,13 +384,15 @@ Before Exercise 1, just load the files and look at them — no analysis, nothing
 
 *A few cells' raw fluorescence over 100 seconds. Notice the slow rises and falls — not sharp spikes. That slowness is the whole problem Exercise 2 solves.*
 
+💬 Not sure if your traces look "normal"? Describe what you're seeing to Cline and ask whether that looks like reasonable two-photon calcium data — a low-stakes sanity check before you've built any intuition of your own.
+
 ![Mean image with detected cells](assets/step0_mean_image_with_rois.png)
 
 *The actual field of view, averaged over the whole recording, with cyan dots marking Suite2p's detected cells. A grainy grayscale image with round bright blobs, dark blood-vessel-like curves, and dots landing on most (not all) of the bright blobs.*
 
-If your plots look roughly like this, you're oriented and ready for Exercise 1.
+💬 Curious what other fields live in `stat`, or what a "median location" means for an irregularly-shaped ROI? Ask Cline to explain — no pressure to fully understand `stat.npy` yet, but it's worth poking at while there's nothing riding on it.
 
-💬 Not sure how to load an `.npy` file, or what `ops['meanImg']` even is? Ask Cline — that's exactly what it's there for.
+If your plots look roughly like this, you're oriented and ready for Exercise 1.
 
 ---
 
@@ -397,6 +403,8 @@ If your plots look roughly like this, you're oriented and ready for Exercise 1.
 Fluorescence measured from a cell body comes from **two sources**: the cell itself (signal) and the surrounding tissue — dendrites, glia, other cells (contamination). Light from that surrounding tissue bleeds into your measurement because the microscope's optics aren't perfectly sharp.
 
 $$F_{\text{obs}} = F_{\text{cell}} + \alpha \times F_{\text{neuropil}} + \text{noise}$$
+
+💬 If that notation is more confusing than helpful, ask Cline to restate it in plain language, or to walk through what happens to one single frame's value as you subtract more and more neuropil.
 
 Without correcting for this, a burst of activity in the surrounding tissue can look like activity in your cell — even if the cell did nothing.
 
@@ -433,6 +441,8 @@ Apply `F_corrected = F - 0.7 * Fneu` to the good-quality cells (`iscell ≥ 0.15
 
 *Every one of the 113 good cells, not just the average. Left: each cell's own F-vs-Fneu correlation before (blue) and after (green) correction, sorted by the raw value. Right: the same data as a scatter — every point falls below the y=x line, meaning the correction reduces correlation for every single cell, not just on average.*
 
+💬 Once you have your own version of this plot, ask Cline what it would expect to see if the correction had failed completely, or worked perfectly — then compare that to what you actually got. That contrast is a good way to build intuition for what "partial correction" (our real result here) actually means.
+
 ---
 
 ## Exercise 2: Spike Deconvolution (Main)
@@ -444,6 +454,8 @@ Calcium indicators respond **slowly** to spikes. A single spike (~1 ms) triggers
 $$F(t) = \text{baseline} + \sum_{\text{spikes}} h(t - t_s) + \text{noise}, \qquad h(t) = \exp(-t/\tau)$$
 
 Given the observed $F(t)$, you must **invert** this to recover the spike times.
+
+💬 "Invert this" is doing a lot of work in one sentence. If it's not obvious why this is hard — why you can't just look at where $F(t)$ jumps up — ask Cline to explain what happens when two spikes fire close together and their two exponential decays add on top of each other. Seeing that overlap concretely is most of the intuition you need for the rest of this exercise.
 
 ### The Existing Solution
 
@@ -477,6 +489,8 @@ Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/
 **Data**: Use a subset of run02-054 — e.g. the first 30 good-quality cells and the first 2000 frames (~2.2 minutes). The deconvolution below solves an $n_{\text{frames}} \times n_{\text{frames}}$ system per cell, so runtime grows fast with both cell count and frame count; a subset keeps this tractable. The benchmarks below were measured on exactly this subset — running on the full 113 cells × 4535 frames will work but will be much slower, and your numbers may shift somewhat since more/different cells are included.
 
 **Method**: For each cell in your subset, estimate its own τ from the autocovariance of its fluorescence trace (fit the exponential decay slope across several lags — don't assume Suite2p's fixed 1.0s applies to every cell). Deconvolve real fluorescence with that cell's own kernel using the same Lasso approach as Deliverable 1 (note: `alpha` will likely need to be much larger here — real fluorescence is on a much bigger absolute scale than the synthetic data).
+
+💬 If "autocovariance" and "fitting the decay slope" feel like a black box, ask Cline to generate a synthetic exponential-decay trace with a known τ and walk through recovering that τ step by step — much easier to trust the method on real cells once you've seen it recover a number you already know is correct.
 
 Then compare against Suite2p's spike inference (`spks.npy`) — but **not** with sensitivity/precision/F1. Suite2p's own documentation doesn't define any threshold for turning its continuous output into discrete spike events; it's meant to be used as a continuous trace. Inventing your own threshold just to force a sensitivity/precision number would mean that number partly reflects your arbitrary threshold choice, not real agreement between the two methods. Instead, **correlate the two continuous traces directly**, per cell — no threshold needed.
 
@@ -537,6 +551,8 @@ Suite2p's default detector (**Sparsery**, [docs](https://suite2p.readthedocs.io/
 
 In this exercise, you'll build something much simpler — a detector that only looks at **one static image** (the time-averaged fluorescence) — and see how much performance that costs you.
 
+💬 If it's not intuitive why "the whole movie" is more informative than "a picture of the average," ask Cline for an example of two things that would look identical in a time-averaged image but obviously different if you watched them over time — that's the exact gap this exercise is measuring.
+
 ### Deliverable 1 — Detect and Match by Position
 
 **Data**: Use all 125 of Suite2p's detected ROIs (`stat.npy`) as your ground truth, not just the 113 good-quality ones — the benchmark numbers below include the lower-confidence detections too.
@@ -575,6 +591,8 @@ Position-matching only checks whether your detection's *center* landed near a Su
 ![Match quality: good vs. poor correlation examples](assets/exercise3_match_quality_examples.png)
 
 *Top two rows: "good" matches — the yellow (yours) and cyan (Suite2p) outlines visibly overlap, and the z-scored traces track each other closely. Bottom two rows: "poor" matches — same position-matching criterion counted these as correct, but the outlines are clearly different blobs and the traces don't correlate at all.*
+
+💬 Looking at your own "poor match" examples, ask Cline to help you think through a fix — would a smaller matching-distance threshold help, or would it just trade false "matches" for missed real ones? You don't need to implement a fix; reasoning through the tradeoff out loud (with Cline pushing back) is the useful part.
 
 ### What You'll Discover
 
