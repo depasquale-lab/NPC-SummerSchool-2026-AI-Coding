@@ -3,6 +3,15 @@
 
 **Roadmap**: This document has two parts. First, **setup** (getting onto the SCC, installing an AI coding assistant, cloning the repo) — skip ahead if you've already done this. Second, **the three exercises** themselves, starting at [The Exercises](#the-exercises-warmup--main--challenge). If you just want to know what you'll actually be doing, jump there now and come back for setup afterward.
 
+**Emoji glossary** — four markers recur throughout this guide, each meaning something different:
+
+| Marker | Meaning |
+|---|---|
+| ❗ | **Really important — don't skip this.** A setup requirement, a must-do step, or a framing fact that shapes how you should approach what follows. |
+| ⚠️ | **A silent pitfall.** Something that will quietly produce wrong results if you get it wrong — code that still *runs*, just badly — not something that throws an obvious error. |
+| ✅ | **Verified, not assumed.** A specific number or setting that was checked against this dataset's actual saved settings or Suite2p's real code, not guessed from documentation or a typical default. |
+| 💬 | **A Cline tip.** A suggestion for something to ask or delegate to Cline at that specific point — optional, not required to complete the exercise. |
+
 ### What This Exercise Is About
 
 You'll learn to analyze **real two-photon calcium imaging recordings** from awake mice using Python and AI-assisted coding (Cline + Gemini). The data comes from cortical neurons expressing genetically-encoded calcium indicators (jRGECO1a), imaged at 15 Hz during spontaneous activity.
@@ -148,6 +157,8 @@ Once installed and configured:
 
 ❗ **Once that sanity check passes, ask Cline to read this README (`README.md`) in full.** That gives it the full context for everything you'll ask it afterward, instead of guessing from a single pasted snippet.
 
+❗ **Keep Cline in Plan mode until you're actually ready for it to write code.** Cline has a Plan/Act toggle right in its chat box: in Plan mode, it reads files, asks clarifying questions, and lays out what it intends to do — but doesn't touch anything. Switch to Act mode only once its plan actually matches what you want; that's when it starts making edits. Working out the approach in Plan mode first is much cheaper than untangling a multi-file edit you didn't actually want.
+
 ### Usage Limits
 
 You get **500 requests per day** with `gemini-3.1-flash-lite`. Check usage at:
@@ -170,6 +181,8 @@ Now that Cline is installed, use it to clone the repo.
 > "Clone the repository: https://github.com/depasquale-lab/NPC-SummerSchool-2026-AI-Coding.git"
 
 Cline will execute these commands for you. Then verify it worked by running `ls README.md` in a terminal. You should see the README.md file confirming it cloned successfully.
+
+❗ **This repo does not ship with a `.gitignore`** — right after cloning (before you create `.venv/` in Step 4, or run `git add -A` later) is the moment to fix that. Ask Cline: "Add a `.gitignore` for this project, covering things like the `.venv/` folder, notebook checkpoints, and any large data files." Skipping this is exactly how a multi-hundred-MB `.venv/` folder ends up accidentally committed and pushed.
 
 **Next, create a working branch** for your exercise work. Ask Cline:
 
@@ -197,16 +210,17 @@ Now that Cline is installed, use it to set up your Python environment.
 
 **In the VS Code terminal**, ask Cline:
 
-> "Set up a Python virtual environment with all required packages. Run these commands:
+> "Set up a Python virtual environment for this project. Run these commands:
 > ```
 > python3 -m venv .venv
 > source .venv/bin/activate
 > pip install --upgrade pip
-> pip install -r requirements.txt
 > ```
-> Then verify it worked by running `python3 -c "import numpy; print('Success!')"`"
+> Then verify it's active by running `which python3` — it should point inside `.venv`."
 
 Cline will execute these commands for you. You should see `(.venv)` in your terminal prompt when done.
+
+❗ **There's no `requirements.txt` handed to you, and that's deliberate — install packages as you actually need them, not all upfront.** Step 0 will be the first time you need anything (numpy, matplotlib); later exercises need a few more (e.g. scikit-learn for Exercise 2's Lasso solver, tifffile for Exercise 3's registered movie). When a cell fails with `ModuleNotFoundError: No module named 'X'`, that's your cue: ask Cline to `pip install X` (with `.venv` active) and re-run the cell. That's a normal, expected part of the workflow — nobody hands you a dependency list before you've written the code that needs it.
 
 💬 If you've never used a virtual environment before and are wondering why we don't just `pip install` directly, ask Cline — it's a good five-minute detour, and understanding it now will save confusion the first time you juggle two projects with conflicting package versions.
 
@@ -367,7 +381,9 @@ print(f"Frames: {F.shape[1]} ({F.shape[1]/15/60:.1f} minutes at 15 Hz)")
 
 # The Exercises: Warmup → Main → Challenge
 
-❗ **These exercises are designed for students new to Python and data analysis**. They guide you through real research pipelines step-by-step.
+❗ **These exercises are designed for students new to Python and data analysis**. They guide you through real research pipelines step-by-step. Do them in **Python** — that's what every scaffolding step, notebook, and file format in this guide assumes.
+
+❗ **If you're not a strong coder, that's completely fine — it's the point.** These exercises are as much about learning to work *with* an AI coding assistant as they are about the neuroscience. You don't need to already know how to build a Toeplitz matrix or run `scipy.ndimage.label` before you start — you need to be able to describe what you're trying to do, read Cline's code well enough to sanity-check it against the results below, and ask follow-up questions when something doesn't make sense. Not understanding a line of code yet is exactly the situation Cline is there for, not a sign you're behind.
 
 **If you already know Python/data science**: Feel free to use your own approaches! Work with different data, implement advanced variants, parallelize code, or extend the exercises. Use any AI tool you prefer (Cline, Claude, ChatGPT, etc.) — the goal is learning the neuroscience and algorithms, not following a script.
 
@@ -409,6 +425,8 @@ So before Exercise 1, take a few minutes to just load the files and look at them
 💬 Curious what other fields live in `stat`, or what a "median location" means for an irregularly-shaped ROI? Ask Cline to explain — no pressure to fully understand `stat.npy` yet, but it's worth poking at while there's nothing riding on it.
 
 If your plots look roughly like this, you're oriented and ready for Exercise 1.
+
+❗ **Commit your progress** before moving on — this is a natural checkpoint. Ask Cline: "Show me `git status`, then commit this with a message describing what Step 0 actually did." Having Cline check `git status` first (not just commit blindly) is worth doing every time — it's your chance to notice anything unexpected staged for commit, like a `.venv/` folder that slipped past your `.gitignore`.
 
 ---
 
@@ -458,6 +476,8 @@ Apply `F_corrected = F - 0.7 * Fneu` to the good-quality cells (`iscell ≥ 0.15
 *Every one of the 113 good cells, not just the average. Left: each cell's own F-vs-Fneu correlation before (blue) and after (green) correction, sorted by the raw value. Right: the same data as a scatter — every point falls below the y=x line, meaning the correction reduces correlation for every single cell, not just on average.*
 
 💬 Once you have your own version of this plot, ask Cline what it would expect to see if the correction had failed completely, or worked perfectly — then compare that to what you actually got. That contrast is a good way to build intuition for what "partial correction" (our real result here) actually means.
+
+❗ **Commit and push your progress** before starting Exercise 2. Ask Cline: "Commit my Exercise 1 work with a descriptive message, then push it to my branch." If anything about your `.gitignore` feels uncertain, this is a good moment to ask Cline to double-check `git status` first — better to catch a stray file now than after it's already pushed.
 
 ---
 
@@ -550,6 +570,8 @@ Then compare against Suite2p's spike inference (`spks.npy`) — but **not** with
 
 *Top: raw fluorescence. Bottom: Suite2p's OASIS output and this exercise's per-cell deconvolution, both z-scored and overlaid directly (not thresholded into discrete events — see why above). The two traces track each other closely; the correlation value shown is the actual comparison metric, consistent with the ~0.81 mean across all 30 cells.*
 
+❗ **Commit and push your progress** before starting Exercise 3. Exercise 2 is the most involved piece of work so far, so this is a good one to commit as more than one chunk rather than everything at once. Ask Cline: "Commit my Deliverable 1 (synthetic validation) and Deliverable 2 (real data) work as two separate commits, each with its own descriptive message, then push." Two focused commits are much easier to look back on later than one commit that quietly bundles two different pieces of work together.
+
 ---
 
 ## Exercise 3: ROI Detection (Challenge)
@@ -641,3 +663,5 @@ After implementing a simple detector, you'll see:
 7. **Why Suite2p's default beats this**: by using the whole movie (not one static image), Suite2p can distinguish sources based on *when* they're active, not just how bright they are on average — information a single-image threshold simply doesn't have access to, no matter how it's tuned
 
 This teaches you: **not every gap between a simple method and the real pipeline has the same cause. Some of it is a fixable weakness in your simple method (here, a global threshold's blindness to uneven illumination); the rest is a fundamental information gap (here, a static image discarding all temporal structure) that no amount of tuning on a single image can ever close. Telling those two apart — instead of lumping every shortfall into "needs a better algorithm" — is the actual skill this exercise is teaching.**
+
+❗ **Commit and push your final progress.** Ask Cline: "Commit and push all my Exercise 3 work, then show me the full commit history for my branch so I can see everything I've done across all three exercises." A good last check before you're done — both to confirm nothing got missed, and to see your own progress laid out end to end.
