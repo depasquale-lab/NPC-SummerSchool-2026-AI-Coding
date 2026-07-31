@@ -202,6 +202,8 @@ git push origin username
 
 Pushing after each exercise ensures your work is backed up and instructors can see your progress.
 
+💬 `main` is protected — nobody can push to it directly, including instructors. If `git push` ever errors out with something like "push declined due to repository rule violations," that almost always means you're not actually on your own branch (check with `git branch` — you want to see `* username`, not `* main`). Ask Cline to check what branch you're on and switch you back to it if needed.
+
 ---
 
 ### Step 4: Set Up Python Environment (via Cline)
