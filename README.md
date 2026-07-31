@@ -119,6 +119,8 @@ Once logged in to OnDemand:
 6. Click the **VS Code Server** button that appears
 7. VS Code opens in your browser — you're now on the SCC with everything pre-loaded!
 
+💬 No Cline yet at this point, so if the OnDemand form or the launch itself is confusing, ask a neighbor or an instructor for now — once Cline is installed in the next step, it's also a fine place to ask "what did I just do, and why?" retroactively.
+
 ---
 
 ### Step 2: Set Up an AI Coding Assistant
@@ -144,6 +146,8 @@ Once installed and configured:
 - Ask questions like: "My correlations didn't decrease. What's wrong?" or "Explain neuropil correction"
 - Cline will help you debug, explain code, and suggest improvements
 
+💬 Before trusting Cline with anything real, give it a trivial first task — e.g. "print the numbers 1 to 10" — just to confirm the API key and model are actually wired up correctly. Cheaper to catch a setup problem now than mid-exercise.
+
 ### Usage Limits
 
 You get **500 requests per day** with `gemini-3.1-flash-lite`. Check usage at:
@@ -152,6 +156,8 @@ You get **500 requests per day** with `gemini-3.1-flash-lite`. Check usage at:
 If you run out:
 - Switch to `gemma-4-26b-a4b-it` (1.5K requests/day, less capable)
 - Contact an instructor for unlimited access via our Google Cloud Project
+
+💬 500/day sounds like a lot until you're mid-debug and firing off a request every minute. If you're not sure whether something is worth "spending" a request on, batching a few related questions into one message is usually better than several small back-and-forths.
 
 ---
 
@@ -170,6 +176,8 @@ Cline will execute these commands for you. Then verify it worked by running `ls 
 > "Create a new git branch for my work. Call it `username`" 
 
 (Replace `username` with your SCC username.) This creates your personal branch where you'll commit your progress. Then confirm with `git branch` in a terminal. 
+
+💬 If "branch," "clone," or "commit" are unfamiliar git vocabulary, ask Cline to explain them using this exact situation as the example — much more concrete than a generic git tutorial.
 
 **Important**: After you complete progress on each exercise, commit and push your work:
 
@@ -200,6 +208,8 @@ Now that Cline is installed, use it to set up your Python environment.
 
 Cline will execute these commands for you. You should see `(.venv)` in your terminal prompt when done.
 
+💬 If you've never used a virtual environment before and are wondering why we don't just `pip install` directly, ask Cline — it's a good five-minute detour, and understanding it now will save confusion the first time you juggle two projects with conflicting package versions.
+
 ---
 
 ## Your Work Directory Structure
@@ -220,6 +230,8 @@ Cline will execute these commands for you. You should see `(.venv)` in your term
 │
 └── (data accessed from /projectnb2/npcr25/projects/two_photon/.../processed/)
 ```
+
+💬 Rather than creating these notebooks by hand, ask Cline to set up the `tutorials/friday_exercises/` folder and create empty starter notebooks for each exercise — a natural first real task now that it's installed.
 
 ---
 
@@ -265,6 +277,8 @@ That raw video has already been run through **Suite2p** (see below) to produce t
 5. **Quality scoring**: Assigns a quality-of-detection index to every cell, rating confidence that each ROI is a real neuron
 
 The result is a folder full of `.npy` files containing all the processed data.
+
+💬 If any of Sparsery, OASIS, or "neuropil mask" is unfamiliar jargon, ask Cline to explain it before you get to the exercise that depends on it — much easier to build on a concept you already have some grip on than to learn it and implement it in the same sitting.
 
 ### The Files You'll Load
 
@@ -453,7 +467,9 @@ Calcium indicators respond **slowly** to spikes. A single spike (~1 ms) triggers
 
 $$F(t) = \text{baseline} + \sum_{\text{spikes}} h(t - t_s) + \text{noise}, \qquad h(t) = \exp(-t/\tau)$$
 
-Given the observed $F(t)$, you must **invert** this to recover the spike times.
+Given the observed $F(t)$, you must **invert** this to recover the spike times — concretely, minimize $\frac{1}{2n}\|F - Hs\|_2^2 + \lambda\|s\|_1$ subject to $s \geq 0$, where $H$ is the Toeplitz convolution matrix built from the kernel.
+
+**One clarification worth making explicit now, because it shapes everything downstream**: neither Suite2p's OASIS nor the method you'll build actually outputs a "spike happened here: yes/no" signal. What comes out — Suite2p's `spks.npy`, and your own recovered $s$ — is a continuous **spike amplitude** at every frame: a number meant to represent roughly how much spiking activity contributed to that frame, not a discrete event. It can be exactly zero (no activity), small (a little residual uncertainty about where a nearby spike's mass belongs), or large (one spike, or several spikes close enough together to blend into one frame). This is exactly why you'll need an *extra* step (finding peaks in that continuous output) to get discrete spike times out of it — the raw deconvolution doesn't hand you events, it hands you a curve you still have to interpret. It's also why Deliverable 2 compares your output and Suite2p's output by *correlating two continuous traces* rather than counting matched discrete events: both are estimates of the same underlying continuous quantity, not two lists of binary spikes to line up.
 
 💬 "Invert this" is doing a lot of work in one sentence. If it's not obvious why this is hard — why you can't just look at where $F(t)$ jumps up — ask Cline to explain what happens when two spikes fire close together and their two exponential decays add on top of each other. Seeing that overlap concretely is most of the intuition you need for the rest of this exercise.
 
@@ -472,41 +488,39 @@ Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/
 **Scaffolding for the L1 (Lasso) solve** — this is the part most likely to trip you up, so here's the concrete shape of it:
 
 1. Build the kernel as a 1D array: `h = np.exp(-t_kernel / tau)`, where `t_kernel` covers ~5τ worth of frames (long enough for the exponential to decay to near zero).
-2. Build the Toeplitz convolution matrix $H$ (shape `n_frames × n_frames`), where each column is the kernel shifted down by one frame: for `i in range(n_frames)`, for `k in range(len(h))`, set `H[i+k, i] = h[k]` (skip if `i+k >= n_frames`). Column `i` of $H$ is "what the fluorescence looks like if there's exactly one spike at frame `i`" — multiplying $H$ by a spike vector $s$ gives you back a fluorescence trace.
-3. Subtract off the baseline from your fluorescence (`F - F.min()`, or similar) so the target you're fitting against starts near zero, matching what $Hs$ produces for an all-zero spike train.
-4. Fit `sklearn.linear_model.Lasso(alpha=..., positive=True).fit(H, F_baseline_subtracted)`. The `.coef_` attribute *is* your recovered spike-amplitude vector $s$ — no separate "solve" step needed beyond this one `.fit()` call.
-5. `alpha` controls sparsity: start small (e.g. `0.001` for data on the ~100-count scale) and adjust. All-zero output → `alpha` too large. Way more nonzero entries than plausible spikes → `alpha` too small.
-6. Find discrete spike times with `scipy.signal.find_peaks(s, height=s.max() * 0.15, distance=...)` — a height relative to that trace's own max, not an absolute number, since amplitude scale varies.
+2. Convolve your spike train with the kernel to generate synthetic fluorescence, using `np.convolve(spikes, h, mode='full')[:n_frames]` — **not** `mode='same'` (see the ⚠️ below; this one is a real pitfall, not a style choice).
+3. Build the Toeplitz convolution matrix $H$ (shape `n_frames × n_frames`), where each column is the kernel shifted down by one frame: for `i in range(n_frames)`, for `k in range(len(h))`, set `H[i+k, i] = h[k]` (skip if `i+k >= n_frames`). Column `i` of $H$ is "what the fluorescence looks like if there's exactly one spike at frame `i`" — multiplying $H$ by a spike vector $s$ gives you back a fluorescence trace.
+4. Subtract off the baseline from your fluorescence (`F - F.min()`, or similar) so the target you're fitting against starts near zero, matching what $Hs$ produces for an all-zero spike train.
+5. Fit `sklearn.linear_model.Lasso(alpha=..., positive=True).fit(H, F_baseline_subtracted)`. The `.coef_` attribute *is* your recovered spike-amplitude vector $s$ — no separate "solve" step needed beyond this one `.fit()` call.
+6. `alpha` controls sparsity: start small (e.g. `0.002` for data on the ~100-count scale) and adjust. All-zero output → `alpha` too large. Way more nonzero entries than plausible spikes → `alpha` too small.
+7. Find discrete spike times with `scipy.signal.find_peaks(s, height=s.max() * 0.15, distance=...)` — a height relative to that trace's own max, not an absolute number, since amplitude scale varies.
 
-⚠️ Two things that will silently break this:
-- **Use a non-negative Lasso**, not `scipy.optimize.nnls` plus a smoothness penalty. Spikes are sparse impulses, not smooth curves; a smoothness penalty (penalizing differences between neighboring $s$ values) fights against recovering them.
+⚠️ Three things that will silently break this — the first one is the sneakiest, because everything still *runs*, it just quietly recovers much worse spikes:
+- **Generate the synthetic fluorescence with a causal convolution, matching $H$.** `np.convolve(spikes, h, mode='same')` **centers** the kernel around each spike, so the spike's effect leaks *backward* in time too. But $H$ (above) is built causally — a spike at frame $i$ only ever affects frames $i, i+1, i+2, \ldots$, never anything before $i$. If your synthetic data generator and your $H$ matrix disagree about this, every recovered spike lands a few frames away from where it actually should, and it looks like scattered false positives and false negatives — not an obviously "wrong" result, just a much worse one. Use `mode='full'` and truncate to `n_frames`, not `mode='same'`.
+- **Use a non-negative Lasso**, not `scipy.optimize.nnls` plus a smoothness penalty. Here's concretely what the two penalties do to the recovered vector $s$, since "L1 vs. smoothness" is easy to wave your hands at and hard to actually picture:
+  - **L1 penalty** ($\sum |s_i|$, what Lasso minimizes): the cheapest way to shrink this is to push individual entries of $s$ to exactly zero. It has no preference for *which* entries — it just wants as few nonzero entries as possible, each carrying whatever amplitude it needs. That matches a real spike train: long stretches of exact zero, punctuated by isolated nonzero frames.
+  - **Smoothness penalty** ($\sum (s_i - s_{i-1})^2$, a differencing penalty): the cheapest way to shrink *this* is to make neighboring entries similar to each other. Applied to a true spike — one frame with value 1, its neighbors at 0 — this penalty is minimized by *spreading that 1 out* across several neighboring frames instead (e.g. three frames at ~0.33 each has smaller squared differences than one frame at 1 next to zeros). The penalty is structurally rewarded for blurring exactly the sharp jump you're trying to recover.
+  
+  That blurring is the literal mechanism behind why a smoothness penalty produces smeared, hard-to-read output instead of clean, isolated spikes — it isn't a minor implementation detail, it's the whole reason the earlier (worse) version of this exercise looked messy.
 - **Match peaks, not frames.** The recovered trace spreads across several frames around each real event. Find peaks in it and match each to the nearest true spike within a small tolerance window — comparing frame-by-frame manufactures false positives out of one event's own shoulders.
 
-💬 This is the most mathematically involved exercise — if the inverse problem, the Toeplitz matrix, or why the L1 penalty matters doesn't click, ask Cline to walk through it with a concrete small example (e.g. 3 spikes, a short kernel). Also a good exercise to ask Cline to help tune `alpha` if your solver returns all zeros or way too many spikes.
+💬 If "the L1 penalty prefers sparsity, the smoothness penalty prefers blurring" is still abstract, ask Cline to run both penalties on the same tiny example — say, a single isolated spike, `s = [0, 0, 1, 0, 0]` — and show you what each one's minimizer actually looks like. Seeing the two outputs side by side on one spike is much more convincing than any explanation in prose.
+
+💬 This is also the most mathematically involved exercise overall — if the inverse problem or the Toeplitz matrix itself doesn't click, ask Cline to walk through it with a concrete small example (3 spikes, a short kernel). Also a good exercise to ask Cline to help tune `alpha` if your solver returns all zeros or way too many spikes.
 
 ### Deliverable 2 — Real Data
 
 **Data**: Use a subset of run02-054 — e.g. the first 30 good-quality cells and the first 2000 frames (~2.2 minutes). The deconvolution below solves an $n_{\text{frames}} \times n_{\text{frames}}$ system per cell, so runtime grows fast with both cell count and frame count; a subset keeps this tractable. The benchmarks below were measured on exactly this subset — running on the full 113 cells × 4535 frames will work but will be much slower, and your numbers may shift somewhat since more/different cells are included.
 
-**Method**: For each cell in your subset, estimate its own τ from the autocovariance of its fluorescence trace (fit the exponential decay slope across several lags — don't assume Suite2p's fixed 1.0s applies to every cell). Deconvolve real fluorescence with that cell's own kernel using the same Lasso approach as Deliverable 1 (note: `alpha` will likely need to be much larger here — real fluorescence is on a much bigger absolute scale than the synthetic data).
+**Method**: For each cell in your subset, estimate its own τ from the autocovariance of its fluorescence trace — for exponential decay, $\text{acov}[\text{lag}] \propto \gamma^{\text{lag}}$ where $\gamma = \exp(-1/(\tau \cdot \text{frame\_rate}))$, so fit $\log(\text{acov})$ vs. lag over several lags (a single two-point ratio is too noisy for one real trace) and don't assume Suite2p's fixed 1.0s applies to every cell. Deconvolve real fluorescence with that cell's own kernel using the same Lasso approach as Deliverable 1 (note: `alpha` will likely need to be much larger here — real fluorescence is on a much bigger absolute scale than the synthetic data).
 
 💬 If "autocovariance" and "fitting the decay slope" feel like a black box, ask Cline to generate a synthetic exponential-decay trace with a known τ and walk through recovering that τ step by step — much easier to trust the method on real cells once you've seen it recover a number you already know is correct.
 
 Then compare against Suite2p's spike inference (`spks.npy`) — but **not** with sensitivity/precision/F1. Suite2p's own documentation doesn't define any threshold for turning its continuous output into discrete spike events; it's meant to be used as a continuous trace. Inventing your own threshold just to force a sensitivity/precision number would mean that number partly reflects your arbitrary threshold choice, not real agreement between the two methods. Instead, **correlate the two continuous traces directly**, per cell — no threshold needed.
 
-⚠️ This is a different metric than Deliverable 1 on purpose: Deliverable 1 has real discrete ground truth (you generated the spikes), so sensitivity/precision/F1 makes sense there. Deliverable 2's real-data comparison has no discrete ground truth — just two different continuous estimates — so a continuous correlation is the honest comparison.
-
 **Results should look something like this** (this dataset):
-- **Deliverable 1 (synthetic, SNR ≈ 3)**: F1 ≈ 0.34 (sensitivity 32%, precision 37%) — modest. Deconvolving overlapping, noisy transients is a genuinely hard problem; don't expect near-perfect recovery from a basic solver.
-- **Deliverable 2 (real data)**: per-cell τ ranges ~0.17–2.3s, median ≈ 0.41s — clearly not one-size-fits-all, and mostly below Suite2p's fixed 1.0s. Correlation with Suite2p's spike inference: mean r ≈ **0.81**, median ≈ **0.85** across 30 cells, with 29/30 cells above r = 0.5 — strong agreement despite the two methods using completely different algorithms.
-
-### Implementation Notes
-
-- **The inverse problem**: minimize $\frac{1}{2n}\|F - Hs\|_2^2 + \lambda\|s\|_1$ subject to $s \geq 0$, where $H$ is the Toeplitz convolution matrix built from the kernel
-- **Use L1 sparsity, not smoothness.** Most timepoints have no spike — a penalty on $s$ itself matches that. A penalty on *differences between neighbors* pushes toward smooth, spread-out solutions, the opposite of what a spike train looks like.
-- **Match peaks, not frames.** The kernel spans many frames, so one real event produces a broad bump — comparing that bump frame-by-frame against a single ground-truth frame manufactures false positives out of its own shoulders.
-- **Estimating γ**: for exponential decay, $\text{acov}[\text{lag}] \propto \gamma^{\text{lag}}$ where $\gamma = \exp(-1/(\tau \cdot \text{frame\_rate}))$. Fit $\log(\text{acov})$ vs. lag over several lags — one two-point ratio is too noisy for a single real trace.
-- **Tune `alpha` (the L1 penalty) by scale.** Too large and the solver returns all zeros; too small and it overfits noise. Real fluorescence (hundreds–thousands of counts) needs a much larger `alpha` than the synthetic data in Deliverable 1 to have a comparable effect.
+- **Deliverable 1 (synthetic, SNR ≈ 3)** — scored with sensitivity/precision/F1 against the ground truth *you generated*: F1 ≈ 0.81 (sensitivity 70%, precision 97%) — good but not perfect. Precision is high (few false alarms), sensitivity is lower (some real events still get missed) — noisy, overlapping transients are still a genuinely hard problem, just not an intractable one once the forward/inverse models actually agree on alignment.
+- **Deliverable 2 (real data)** — no ground truth here, so scored by correlation instead: per-cell τ ranges ~0.17–2.3s, median ≈ 0.41s — clearly not one-size-fits-all, and mostly below Suite2p's fixed 1.0s. Correlation with Suite2p's spike inference: mean r ≈ **0.81**, median ≈ **0.85** across 30 cells, with 29/30 cells above r = 0.5 — strong agreement despite the two methods using completely different algorithms.
 
 ### What Your Results Might Look Like
 
@@ -514,7 +528,7 @@ Then compare against Suite2p's spike inference (`spks.npy`) — but **not** with
 
 ![Synthetic spike recovery](assets/exercise2_synthetic_validation.png)
 
-*Top: noisy vs. noiseless synthetic fluorescence. Middle two rows: true spikes vs. recovered spikes. Bottom: overlay. Recovery is imperfect — some true events are missed, and the recovered trace has spurious small peaks — consistent with F1 ≈ 0.34.*
+*Top: noisy vs. noiseless synthetic fluorescence. Middle two rows: true spikes vs. recovered spikes, on their own natural scales. Bottom: the recovered trace with true spike times marked as vertical dashed lines — deliberately not plotted on a shared amplitude axis with the (binary) true spikes, since that would make the true spikes invisible. Recovery is good but not exact — most dashed lines land right on a recovered peak, a handful of true spikes are missed, and a few small spurious peaks remain — consistent with F1 ≈ 0.81.*
 
 **Per-cell kernel estimation (part of Deliverable 2):**
 
@@ -560,6 +574,17 @@ In this exercise, you'll build something much simpler — a detector that only l
 Detect cells from the static mean image alone (smooth → threshold → connected components), match your detections against Suite2p's ROI centers by pixel distance, and report sensitivity and precision. Then look at your false positives and false negatives: where do they cluster, and why?
 
 ⚠️ Use `ops['meanImg']` (from `ops.npy`) for the image — **not** `F.mean(axis=1)`, which gives one number per already-detected cell, not a spatial image at all.
+
+**Scaffolding for the detector** — the concrete shape of "smooth → threshold → connected components":
+
+1. Smooth the mean image lightly: `scipy.ndimage.gaussian_filter(mean_img, sigma=~0.7)`. This isn't optional cosmetic smoothing — it merges single-pixel noise specks into the shape of the blob they're part of, before you threshold.
+2. Pick a threshold as a percentile of the smoothed image's pixel values (`np.percentile(smoothed, p)`), not a fixed count — raw brightness varies a lot by dataset, but "top X% of pixels" is comparable across datasets. Start high (try 95–99); the intuitive "80th percentile" choice lets in far more diffuse neuropil than you'd expect.
+3. Threshold to get a binary mask: `binary = smoothed > threshold`.
+4. Label connected regions of that mask: `labeled, n = scipy.ndimage.label(binary)`. Each labeled region is one candidate detection.
+5. For each labeled region, compute its pixel count and its centroid (mean of its pixel coordinates). Keep only regions whose pixel count falls in a range matching real cell sizes — this dataset's own ROIs span 31–1173 pixels, so a bare `> 10` floor keeps far too much noise and neuropil debris.
+6. For each surviving centroid, find the nearest Suite2p ROI center (from `stat[i]['med']`) and call it a match if the distance is under some threshold (e.g. 30 pixels ≈ 12 μm). Count matches, your unmatched detections (false positives), and unmatched Suite2p ROIs (false negatives) to get sensitivity and precision.
+
+💬 If you're not sure what a "connected component" actually is, ask Cline to visualize a toy 10×10 binary grid with a couple of blobs on it, run `scipy.ndimage.label` on it, and show you the resulting labeled array — much more concrete than the general idea of "grouping touching pixels."
 
 💬 If your sensitivity/precision look nowhere close to the numbers below (e.g. both near 0%), that's usually a sign something upstream is off — wrong image, wrong coordinate order, or a threshold that's degenerate. Describe your numbers to Cline and it can help you narrow down where.
 
