@@ -1,0 +1,26 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Large data files
+*.h5
+*.hdf5
+*.mat
+*.npy
+*.npz
+*.tif
+*.tiff
+*.avi
+*.mp4
+*.mov
+*.raw
+*.dat
+
+# OS files
+.DS_Store
+Thumbs.db
