@@ -1,4 +1,4 @@
-# Friday Exercises: Calcium Imaging Analysis with Agentic AI
+# Friday Exercises: Calcium Imaging Data Processing with Agentic AI
 ## From Raw Imaging to Neural Spike Trains
 
 **Roadmap**: This document has two parts. First, **setup** (getting onto the SCC, installing an AI coding assistant, cloning the repo) — skip ahead if you've already done this. Second, **the three exercises** themselves, starting at [The Exercises](#the-exercises-warmup--main--challenge). If you just want to know what you'll actually be doing, jump there now and come back for setup afterward.
@@ -76,7 +76,7 @@ You'll write **three data-processing pipelines**, each solving one piece of the 
 
 ### By the End
 
-You'll have **three working analysis pipelines**, each self-contained:
+You'll have **three working data-processing pipelines**, each self-contained:
 - Code that takes raw imaging → cleaned spikes (the full pipeline)
 - Detailed understanding of *why* each step exists (not just "we do it because papers do")
 - Quantitative benchmarks showing how your methods compare to the standard (Suite2p)
@@ -223,9 +223,26 @@ Cline will execute these commands for you. You should see `(.venv)` in your term
 
 ## Data Overview
 
-### The Dataset: run02-054
+### What You're Looking At
 
-For consistency, **everyone uses the same dataset**: `TSeries-03042024-run02-054`
+This is a real two-photon calcium imaging recording: a live, awake mouse, imaged through a cranial window, with neurons in layer 2 of cortex expressing a genetically-encoded calcium indicator (jRGECO1a) that gets brighter when a neuron's intracellular calcium rises — which happens when it fires. The raw output of an experiment like this is a video: thousands of grayscale frames, one per timepoint, at 15 Hz.
+
+That raw video has already been run through **Suite2p** (see below) to produce the processed files you'll actually load: cell locations, per-cell fluorescence traces, and a reference set of inferred spike times. You're working from Suite2p's *output*, not the raw video — except in Exercise 3, which also uses the field-of-view image (`ops['meanImg']`). The raw movie exists on disk too, if you're curious (see paths below), but you won't need it for any exercise.
+
+**Use this dataset — everyone should.** `TSeries-03042024-run02-054` is what generated every number, benchmark, and figure in this README. If you use a different dataset, your results won't match what's described here (fine if you're exploring on your own, but the "Expected result" sections won't apply).
+
+**Where the data lives**:
+- **Processed** (what you'll actually load): `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/processed/TSeries-03042024-run02-054/`
+- **Suite2p's spike inference** (your reference in Exercise 2): `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes/TSeries-03042024-run02-054/`
+- **Raw acquisition** (not needed for the exercises): `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/2photon/TSeries-03042024-run02-054/` — the microscope's original output, as multi-gigabyte OME-TIFF files plus acquisition metadata
+
+**Further reading**:
+- [Suite2p on GitHub](https://github.com/MouseLand/suite2p) — the pipeline that processed this data
+- [Suite2p ROI detection docs](https://suite2p.readthedocs.io/en/latest/roidetection/)
+- [Suite2p ROI extraction docs](https://suite2p.readthedocs.io/en/latest/roiextraction/)
+- [Suite2p deconvolution docs](https://suite2p.readthedocs.io/en/latest/deconvolution/)
+
+### The Dataset: run02-054
 
 **Recording specs**:
 - **Source**: Awake Thy1-jRGECO1a mouse, layer 2 cortex, spontaneous activity
@@ -239,10 +256,10 @@ For consistency, **everyone uses the same dataset**: `TSeries-03042024-run02-054
 [**Suite2p**](https://github.com/MouseLand/suite2p) is the industry-standard software for processing two-photon imaging data. It's maintained by the Stringer Lab and used in hundreds of neuroscience papers worldwide.
 
 **What Suite2p does**:
-1. **ROI detection**: By default, Suite2p detects cells using **Sparsery** — a matrix decomposition that looks for spatially-compact, temporally-sparse sources directly in the movie (i.e. it exploits *when* and *where* fluorescence changes over time, not just a single static image). This is the method that produced the ROIs in this dataset. Suite2p also offers a deep-learning option (Cellpose, an anatomical segmentation model), but that's a separate, optional mode — it was **not** used to generate this dataset's ROIs.
-2. **Fluorescence extraction**: Measures raw fluorescence (F) from each detected ROI
-3. **Neuropil measurement**: Measures fluorescence (Fneu) from the surrounding neuropil tissue
-4. **Spike inference**: Applies its OASIS-based spike inference algorithm to recover spike times from fluorescence
+1. **ROI detection** ([docs](https://suite2p.readthedocs.io/en/latest/roidetection/)): Suite2p offers three detection algorithms, selected by an `algorithm` setting: **Sparsery** (the default), Sourcery, and Cellpose. Sparsery is a matrix decomposition that looks for spatially-compact, temporally-sparse sources directly in the movie (i.e. it exploits *when* and *where* fluorescence changes over time, not just a single static image) — this is the method that produced the ROIs in this dataset. Cellpose, by contrast, is a deep-learning anatomical segmentation model that works on a static summary image, not the movie — it's an available option, but was **not** used here.
+2. **Fluorescence extraction** ([docs](https://suite2p.readthedocs.io/en/latest/roiextraction/)): Measures raw fluorescence (F) from each detected ROI
+3. **Neuropil measurement** ([docs](https://suite2p.readthedocs.io/en/latest/roiextraction/)): Measures fluorescence (Fneu) from the surrounding neuropil tissue
+4. **Spike inference** ([docs](https://suite2p.readthedocs.io/en/latest/deconvolution/)): Applies its OASIS-based spike inference algorithm to recover spike times from fluorescence
 5. **Quality scoring**: Assigns a quality-of-detection index to every cell, rating confidence that each ROI is a real neuron
 
 The result is a folder full of `.npy` files containing all the processed data.
@@ -261,8 +278,8 @@ The result is a folder full of `.npy` files containing all the processed data.
 - Shape: Same as F (125 cells × 4535 frames)
 - What it is: Fluorescence from the tissue surrounding each ROI, measured from a surround mask (padded around the ROI, excluding other detected cells)
 - Range: ~350–3730 counts/frame (often as bright or brighter than the cell signal!)
-- How Suite2p measures it: For each ROI, Suite2p builds a "neuropil mask" by: (1) padding the ROI outward, (2) growing a square region until it contains enough non-cell pixels, (3) excluding pixels from other detected ROIs, and (4) averaging fluorescence across these neuropil pixels
-- Why you need it: This is the contamination you'll remove in Exercise 1. By measuring Fneu separately, Suite2p gives you a direct estimate of the neuropil signal contaminating F. Without correction, ROIs show much higher correlation with each other due to spatially-invariant neuropil surges affecting all cells simultaneously. The correction Suite2p applied to this dataset is **F' = F - 0.7 × Fneu** — and 0.7 isn't a one-off choice, it's Suite2p's actual built-in default neuropil coefficient (`neucoeff`).
+- How Suite2p measures it ([docs](https://suite2p.readthedocs.io/en/latest/roiextraction/)): For each ROI, Suite2p builds a "neuropil mask" by: (1) padding the ROI outward by a fixed number of pixels to exclude the cell itself, (2) growing a rectangular (or circular, if configured) region until it contains enough non-cell pixels, (3) excluding pixels belonging to other detected ROIs, and (4) averaging fluorescence across these neuropil pixels
+- Why you need it: This is the contamination you'll remove in Exercise 1. By measuring Fneu separately, Suite2p gives you a direct estimate of the neuropil signal contaminating F. Without correction, ROIs show much higher correlation with each other due to spatially-invariant neuropil surges affecting all cells simultaneously. The correction Suite2p applied to this dataset is **F' = F - 0.7 × Fneu**. Suite2p's own documentation shows 0.7 as the example `neucoeff` value, and this dataset's own saved processing settings confirm 0.7 is exactly what was used here.
 
 **`iscell.npy`** — **Cell quality scores**
 - Shape: 125 cells × 2 columns
@@ -383,11 +400,11 @@ Without correcting for this, a burst of activity in the surrounding tissue can l
 
 ### The Existing Solution
 
-Suite2p measured this dataset's neuropil and applied its default correction:
+Suite2p measured this dataset's neuropil and applied this correction ([docs](https://suite2p.readthedocs.io/en/latest/roiextraction/)):
 
 $$F_{\text{corrected}} = F_{\text{obs}} - 0.7 \times F_{\text{neuropil}}$$
 
-α = 0.7 is Suite2p's actual built-in default (`neucoeff`) — confirmed from this dataset's own processing settings, not a guess. You'll apply that same correction and measure how well it works.
+α = 0.7 (Suite2p calls this `neucoeff`) is exactly what this dataset's own saved processing settings show was used — not a guess or an approximation. You'll apply that same correction and measure how well it works.
 
 ### Deliverable
 
@@ -424,7 +441,9 @@ Given the observed $F(t)$, you must **invert** this to recover the spike times.
 
 ### The Existing Solution
 
-Suite2p's algorithm, **OASIS**, assumes exponential decay and runs non-negative deconvolution in milliseconds per cell. For this dataset, it was run with **one fixed τ = 1.0s for every cell** — a simplification, since real neurons don't all share identical calcium kinetics.
+Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/deconvolution/)), assumes exponential decay and runs non-negative deconvolution in milliseconds per cell. Its documentation shows τ = 1.0s as an example calcium timescale, and this dataset's own saved processing settings confirm it was actually run with **one fixed τ = 1.0s for every cell** — a simplification, since real neurons don't all share identical calcium kinetics.
+
+**Why not just reimplement OASIS?** OASIS is a specialized, carefully optimized algorithm from its own dedicated research codebase — reproducing it exactly is a substantial engineering project on its own, not what this exercise is asking of you. Instead, you'll solve the *same underlying inverse problem* — recover spikes from a blurred fluorescence trace — with a simpler, more general tool (L1-regularized least squares) that you can build from first principles. That's the point: understanding the problem OASIS solves and building a working (if less polished) solution yourself, not reproducing OASIS's internals.
 
 **Your task**: solve the same inverse problem explicitly, using a kernel timescale you estimate separately for each cell.
 
@@ -438,7 +457,9 @@ Suite2p's algorithm, **OASIS**, assumes exponential decay and runs non-negative 
 
 ### Deliverable 2 — Real Data
 
-**Method**: For each real cell, estimate its own τ from the autocovariance of its fluorescence trace (fit the exponential decay slope across several lags — don't assume Suite2p's fixed 1.0s applies to every cell). Deconvolve real fluorescence with that cell's own kernel using the same Lasso approach as Deliverable 1, then score agreement against Suite2p's spike inference (`spks.npy`) using the **same sensitivity/precision/F1 metrics as Deliverable 1**.
+**Data**: Use a subset of run02-054 — e.g. the first 30 good-quality cells and the first 2000 frames (~2.2 minutes). The deconvolution below solves an $n_{\text{frames}} \times n_{\text{frames}}$ system per cell, so runtime grows fast with both cell count and frame count; a subset keeps this tractable. The benchmarks below were measured on exactly this subset — running on the full 113 cells × 4535 frames will work but will be much slower, and your numbers may shift somewhat since more/different cells are included.
+
+**Method**: For each cell in your subset, estimate its own τ from the autocovariance of its fluorescence trace (fit the exponential decay slope across several lags — don't assume Suite2p's fixed 1.0s applies to every cell). Deconvolve real fluorescence with that cell's own kernel using the same Lasso approach as Deliverable 1, then score agreement against Suite2p's spike inference (`spks.npy`) using the **same sensitivity/precision/F1 metrics as Deliverable 1**.
 
 ⚠️ Suite2p's spikes are *not* a sparse 0/1 train — thresholding at ">0" isn't meaningful. Find peaks in it the same way you find peaks in your own trace, and don't switch to a different metric like Jaccard, which hides whether you're over- or under-detecting relative to Suite2p.
 
@@ -491,11 +512,15 @@ Before analyzing a neuron, you must **find it** in the raw imaging data. The cha
 
 ### The Existing Solution
 
-Suite2p's default detector (**Sparsery**) doesn't just look at one static image — it decomposes the whole movie, searching for sources that are spatially compact *and* temporally sparse (active in only a fraction of frames). That's fundamentally more information than a single mean image contains: a real cell's pixels light up and dim together over time in a way that matches its own activity, while bright neuropil regions may be steady, diffuse, or driven by a different (shared, population-wide) timecourse.
+Suite2p's default detector (**Sparsery**, [docs](https://suite2p.readthedocs.io/en/latest/roidetection/)) doesn't just look at one static image — it decomposes the whole movie, searching for sources that are spatially compact *and* temporally sparse (active in only a fraction of frames). That's fundamentally more information than a single mean image contains: a real cell's pixels light up and dim together over time in a way that matches its own activity, while bright neuropil regions may be steady, diffuse, or driven by a different (shared, population-wide) timecourse.
+
+**Why not just reimplement Sparsery?** Sparsery is an iterative matrix-decomposition algorithm — a real software engineering project on its own, well beyond what a single exercise can ask of you. This exercise has a different goal: build the *simplest possible* baseline (threshold + connected components) and measure exactly how much you lose by ignoring the movie's temporal structure. Seeing that gap firsthand is what motivates why a more sophisticated, movie-aware method like Sparsery exists in the first place — you don't need to build Sparsery to understand why it's necessary.
 
 In this exercise, you'll build something much simpler — a detector that only looks at **one static image** (the time-averaged fluorescence) — and see how much performance that costs you.
 
-### Deliverable
+### Deliverable 1 — Detect and Match by Position
+
+**Data**: Use all 125 of Suite2p's detected ROIs (`stat.npy`) as your ground truth, not just the 113 good-quality ones — the benchmark numbers below include the lower-confidence detections too.
 
 Detect cells from the static mean image alone (smooth → threshold → connected components), match your detections against Suite2p's ROI centers by pixel distance, and report sensitivity and precision. Then look at your false positives and false negatives: where do they cluster, and why?
 
@@ -506,11 +531,27 @@ Detect cells from the static mean image alone (smooth → threshold → connecte
 - Precision: **33.5%** (roughly two-thirds of your detections are not real cells)
 - Both numbers are modest — a single static image genuinely doesn't contain enough information to separate cells from bright neuropil reliably
 
+### Deliverable 2 — Does "Matched" Mean "Same Signal"?
+
+Position-matching only checks whether your detection's *center* landed near a Suite2p ROI's center — it says nothing about whether your detected pixels actually capture that cell's activity. A detection could sit right next to a real cell and still count as a "true positive," while actually measuring something else.
+
+**Method**: For every matched pair from Deliverable 1, pull your detection's own raw pixel-averaged trace directly from the movie (`ops.npy`'s registered TIFF, not anything Suite2p precomputed), and correlate it against Suite2p's own `F` trace for that same cell. Then look at a few of your best- and worst-correlated matches side by side — both the image (do the two ROI outlines actually overlap?) and the traces (do they move together?).
+
+**Expected result** (this dataset):
+- Across the 53 matched pairs: mean correlation **0.37**, median **0.32**, range **[0.04, 0.95]**
+- 17 of 53 matches (32%) have correlation > 0.5 — genuinely capturing the same signal
+- 20 of 53 matches (38%) have correlation < 0.2 — spatially "close enough" but not the same signal
+- Looking at the worst matches, the two ROI outlines are often visibly non-overlapping — the 30-pixel matching threshold in Deliverable 1 is loose enough to count some clearly-different blobs as a "match"
+
 ### What You'll See
 
 ![ROI detection comparison](assets/exercise3_roi_detection_results.png)
 
 *Left: the raw mean fluorescence image. Middle: the smoothed threshold mask. Right: your detections (yellow) overlaid on Suite2p's ROI positions (cyan) — note the mismatches in both directions.*
+
+![Match quality: good vs. poor correlation examples](assets/exercise3_match_quality_examples.png)
+
+*Top two rows: "good" matches — the yellow (yours) and cyan (Suite2p) outlines visibly overlap, and the z-scored traces track each other closely. Bottom two rows: "poor" matches — same position-matching criterion counted these as correct, but the outlines are clearly different blobs and the traces don't correlate at all.*
 
 ### What You'll Discover
 
@@ -518,6 +559,7 @@ After implementing a simple detector, you'll see:
 1. **You miss a substantial fraction of real cells** — a single mean image doesn't separate all cells from background as cleanly as you'd hope
 2. **A large share of your detections are false positives** — bright neuropil regions and imaging artifacts pass the same threshold real cells do
 3. **Static brightness alone is a weak signal**: some real cells aren't much brighter than their surroundings in the time-averaged image, even though they are clearly active over time
-4. **Why Suite2p's default beats this**: by using the whole movie (not one static image), Suite2p can distinguish sources based on *when* they're active, not just how bright they are on average — information a single-image threshold simply doesn't have access to
+4. **"Correct" isn't binary**: even among your position-matched "true positives," a third have essentially no signal agreement with the cell they supposedly matched — sensitivity and precision alone hide this
+5. **Why Suite2p's default beats this**: by using the whole movie (not one static image), Suite2p can distinguish sources based on *when* they're active, not just how bright they are on average — information a single-image threshold simply doesn't have access to
 
-This teaches you: **the information you throw away (here, all of the movie's temporal structure) often matters more than the algorithm you use on what's left.**
+This teaches you: **the information you throw away (here, all of the movie's temporal structure) often matters more than the algorithm you use on what's left — and a metric that only checks position can hide exactly how much you're missing.**
