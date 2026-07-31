@@ -1,13 +1,96 @@
-# Day 1: Calcium Imaging Analysis with Agentic AI
-## Two-Photon Neural Recording in Real Time
+# Friday Exercises: Calcium Imaging Analysis with Agentic AI
+## From Raw Imaging to Neural Spike Trains
 
-Learn to analyze real neural recordings from awake mice using Python and agentic AI (Cline + Gemini). This Friday evening exercise teaches you three core skills: **ROI detection** (finding neurons), **spike deconvolution** (recovering spikes from fluorescence), and **neuropil correction** (removing contamination).
+**Roadmap**: This document has two parts. First, **setup** (getting onto the SCC, installing an AI coding assistant, cloning the repo) — skip ahead if you've already done this. Second, **the three exercises** themselves, starting at [The Exercises](#the-exercises-warmup--main--challenge). If you just want to know what you'll actually be doing, jump there now and come back for setup afterward.
+
+### What This Exercise Is About
+
+You'll learn to analyze **real two-photon calcium imaging recordings** from awake mice using Python and AI-assisted coding (Cline + Gemini). The data comes from cortical neurons expressing genetically-encoded calcium indicators (jRGECO1a), imaged at 15 Hz during spontaneous activity.
+
+**The challenge**: Raw imaging data looks like noisy grayscale video. Your job is to extract **when each neuron fired spikes** — the fundamental unit of neural communication. Here's what you're analyzing:
+
+<img src="assets/imaging_preview.gif" alt="Two-Photon Imaging with ROIs and Activity" width="800">
+
+*Raw imaging frames (gray) with cyan ROI circles (Suite2p detected neurons) and red/orange activity heatmap (fluorescence).*
+
+**What you're seeing**: The grayscale background is raw pixel intensity from the actual recording. Overlaid are cyan circles marking detected cell bodies (~10–15 μm diameter in this dataset), and a red/orange heatmap showing each cell's own fluorescence rising and falling over time. Watch individual cells light up and dim at different moments — that's the calcium signal, and it's slow and blurred compared to the instantaneous spikes that caused it.
+
+Two things to notice, each pointing at one of this exercise's problems:
+- **Not every cyan circle is a "clean" detection.** Some bright regions are neuropil contamination, not the neuron itself — Exercise 1 removes this contamination, and Exercise 3 explores why finding the cells in the first place is hard.
+- **The slow rise and fall you're watching is not the spike train.** It's the *convolved* response — a blurred version of fast, discrete spikes. Exercise 2 is about inverting that blur to recover the original spike times.
+
+This exercise walks through three interconnected problems, in this order:
+
+1. **Neuropil Correction** (Exercise 1) — How do we remove contamination from nearby tissue?
+2. **Spike Deconvolution** (Exercise 2) — When did spikes occur, given the slow calcium dynamics we just saw?
+3. **ROI Detection** (Exercise 3) — Which pixels belong to which neurons, in the first place?
+
+### Why This Matters
+
+**For neuroscience**: Neurons communicate through spike timing — the precise moments when they fire. Extracting accurate spike times is foundational because it reveals:
+- **What neurons encode**: A visual cortex neuron might fire in response to oriented edges. A motor cortex neuron might fire before a specific movement. Without spike timing, you can't answer "what does this neuron do?"
+- **How circuits work**: Population activity patterns show whether neurons coordinate (synchronized firing) or compete (mutual inhibition). This reveals circuit function at the network level.
+- **How learning happens**: The timing of spikes matters for synaptic plasticity. Spike-timing-dependent plasticity (STDP) is a fundamental learning rule — spikes separated by milliseconds have opposite effects on synapse strength.
+- **Disease signatures**: Abnormal spike patterns appear in epilepsy, autism, and neurodegeneration before visible behavioral changes.
+
+In short: **you can't do modern neuroscience without accurate spike times.**
+
+**For you (and your career)**: This exercise teaches the *exact workflow* used in labs worldwide:
+- You'll encounter real biological problems (noise, contamination, slow sensor dynamics) that don't appear in textbooks
+- You'll design algorithms by understanding tradeoffs (fast but less accurate? slow but precise? what's the right balance?)
+- You'll validate your work rigorously — first on synthetic data where you know the ground truth, then on real neurons
+- You'll compare yourself against the standard (Suite2p's spike inference) so you understand where your method is competitive and where it falls short
+- You'll learn to read and understand scientific code — an essential skill in research
+
+**For AI + science**: You'll see how agentic AI *augments* (not replaces) human understanding:
+- When your optimization doesn't converge, ask Cline "Why isn't this working?" It'll suggest debugging steps, explore numerical issues, and help you iterate quickly
+- When you encounter new concepts (what's a Toeplitz matrix? why is it useful?), ask Cline for intuitive explanations
+- You'll write the *logic* and *math*, but offload boilerplate (building matrices, plotting, I/O) so you stay focused on what matters
+- You'll validate implementations: Cline can help test whether your code matches the paper's equations
+- **Result**: faster development, deeper understanding, less busywork
+
+### What You'll Build
+
+You'll write **three data-processing pipelines**, each solving one piece of the puzzle:
+
+**Exercise 1: Neuropil Removal** (Warmup)
+- **Input**: Raw fluorescence traces (F) and neuropil contamination (Fneu)
+- **Output**: Cleaned fluorescence and understanding of how correction works
+- **What you'll learn**: How preprocessing works, and how to measure whether it actually worked (correlation between corrected F and Fneu, before vs. after)
+- **Real-world parallel**: Every lab applies neuropil correction. This is a standard first step in calcium imaging pipelines.
+
+**Exercise 2: Spike Deconvolution** (Main)
+- **Input**: Corrected fluorescence from Exercise 1
+- **Output**: Spike times recovered via L1-regularized deconvolution, using a per-cell calcium kernel
+- **What you'll learn**:
+  - Part A: Formulate the inverse problem mathematically on synthetic data (you know ground truth)
+  - Part B: Estimate the calcium decay constant τ per-cell using autocovariance, instead of assuming one fixed value for every cell
+  - Part C: Apply the deconvolution with per-cell kernels to real neurons; compare against Suite2p's spike inference
+- **Key insight**: Suite2p was run with a single fixed τ = 1.0s for every cell in this dataset. Real neurons vary — this exercise estimates τ directly from each cell's own data instead.
+- **Real-world parallel**: This is the core of calcium-imaging analysis. Getting spikes right determines everything downstream.
+
+**Exercise 3: ROI Detection** (Challenge)
+- **Input**: The real 2D field-of-view image (not a per-cell trace — an actual picture of the tissue)
+- **Output**: Detected cell locations from a simple threshold-based detector
+- **What you'll learn**: Why a simple, single-image threshold approach struggles to distinguish real cells from bright neuropil, and why Suite2p's approach (which exploits activity *dynamics* over the whole movie, not just one static image) does much better
+- **Real-world parallel**: Finding neurons is the first step, but it's surprisingly hard. Understanding why teaches you to respect the complexity of biological data.
+
+### By the End
+
+You'll have **three working analysis pipelines**, each self-contained:
+- Code that takes raw imaging → cleaned spikes (the full pipeline)
+- Detailed understanding of *why* each step exists (not just "we do it because papers do")
+- Quantitative benchmarks showing how your methods compare to the standard (Suite2p)
+- Intuition about the tradeoffs in algorithm design (speed vs. accuracy, sensitivity vs. specificity)
+- Hands-on experience with numerical optimization, inverse problems, and data validation — skills that transfer to any data science problem
 
 ---
 
 ## Quick Start: Get Set Up on SCC
 
 ### Step 1: Access the SCC via OnDemand
+
+⚠️ **Browser requirement**: Use **Chrome** or **Safari** for best compatibility with OnDemand and VS Code Server.
 
 Go to: [https://scc-ondemand2.bu.edu/](https://scc-ondemand2.bu.edu/)
 
@@ -33,7 +116,7 @@ Once logged in to OnDemand:
    ⚠️ **Important**: Replace `username` with your SCC username (same as your BU login)
 
 4. Click **Launch**
-5. Wait for the session to start (1-2 minutes)
+5. Wait for the session to start
 6. Click the **VS Code Server** button that appears
 7. VS Code opens in your browser — you're now on the SCC with everything pre-loaded!
 
@@ -41,7 +124,7 @@ Once logged in to OnDemand:
 
 ## Set Up Cline + Gemini AI (Required)
 
-**Cline** is your AI coding assistant. You'll use it throughout the exercise to debug code, explain concepts, and get help.
+**Cline** is your AI coding assistant. You'll use it throughout the exercise to debug code, explain concepts, and get help. (Already comfortable with another AI tool — Claude, ChatGPT, etc.? You're welcome to use that instead; the setup below is just the default path.)
 
 ### Installation Steps
 
@@ -79,28 +162,17 @@ Now that Cline is installed, use it to clone the repo.
 
 **In the VS Code terminal**, ask Cline:
 
-> "Clone the repository and navigate to it. Run these commands:
-> ```
-> git clone https://github.com/depasquale-lab/NPC-SummerSchool-2026-AI-Coding.git
-> cd NPC-SummerSchool-2026-AI-Coding
-> ```
-> Then verify it worked by running `ls README.md`"
+> "Clone the repository: https://github.com/depasquale-lab/NPC-SummerSchool-2026-AI-Coding.git"
 
-Cline will execute these commands for you. You should see the README.md file confirming it cloned successfully.
+Cline will execute these commands for you. Then verify it worked by running `ls README.md` in a terminal. You should see the README.md file confirming it cloned successfully.
 
 **Next, create a working branch** for your exercise work. Ask Cline:
 
-> "Create a new git branch for my work. Run:
-> ```
-> git config user.email 'your-bu-email@bu.edu'
-> git config user.name 'Your Full Name'
-> git checkout -b username
-> ```
-> Then confirm with `git branch`"
+> "Create a new git branch for my work. Call it `username`" 
 
-(Replace `username` with your SCC username.) This creates your personal branch where you'll commit your progress.
+(Replace `username` with your SCC username.) This creates your personal branch where you'll commit your progress. Then confirm with `git branch` in a terminal. 
 
-**Important**: After you complete progress on each exercise (Exercise 1, 2, or 3), commit and push your work:
+**Important**: After you complete progress on each exercise, commit and push your work:
 
 ```bash
 git add -A
@@ -140,9 +212,10 @@ Cline will execute these commands for you. You should see `(.venv)` in your term
 │   └── assets/                          ← Images (GIFs, PNGs)
 │
 ├── tutorials/day_1_core/                ← YOU CREATE with Cline
-│   ├── simple_roi_detection.ipynb       ← Exercise 1: ROI detection
-│   ├── neuropil_correction_factor.ipynb ← Exercise 2: Spike deconvolution
-│   └── spike_deconvolution.ipynb        ← Exercise 3: Neuropil correction
+│   ├── step_0_data_exploration.ipynb
+│   ├── exercise_1_neuropil_correction.ipynb
+│   ├── exercise_2_spike_deconvolution.ipynb
+│   └── exercise_3_roi_detection.ipynb
 │
 ├── my_analysis.py, notes.txt, etc.      ← YOUR work files
 │
@@ -153,65 +226,80 @@ Cline will execute these commands for you. You should see `(.venv)` in your term
 
 ## Data Overview
 
-### Dimensions & Formats
+### The Dataset: run02-054
 
-The raw two-photon imaging data comes from **awake Thy1-jRGECO1a mice** (layer 2 cortex, spontaneous activity).
+For consistency, **everyone uses the same dataset**: `TSeries-03042024-run02-054`
 
-#### Per-Run Data
-| Item | Format | Size | Typical Values |
-|------|--------|------|-----------------|
-| **F** (cell fluorescence) | .npy | 125 cells × 4535 frames | ~20-500 counts/frame |
-| **Fneu** (neuropil) | .npy | 125 cells × 4535 frames | ~50-200 counts/frame |
-| **iscell** (quality) | .npy | 125 cells | [0.0 to 1.0] |
-| **spks** (spikes) | .npy | 125 cells × 4535 frames | [0 to 100+] |
-| **stat** (ROI info) | .npy | 125 cells | cell location, size, depth |
+**Recording specs**:
+- **Source**: Awake Thy1-jRGECO1a mouse, layer 2 cortex, spontaneous activity
+- **125 neurons** × 4535 frames (5.04 minutes @ 15 Hz)
+- **90% good quality** (113 cells passing iscell ≥ 0.15 threshold)
+- **Cell size**: detected cell bodies are ~10–15 μm in diameter (measured from this dataset's own ROIs); pixels are ~0.4 μm
+- **Well-characterized**: diverse cell types and firing rates
 
-#### Recording Parameters
-| Parameter | Value |
-|-----------|-------|
-| **Frame rate** | 15 Hz |
-| **Duration** | 5 min (run02-054) to 10 min (run06-058) |
-| **Field of view** | 1024 × 1024 pixels |
-| **Pixel size** | ~0.37 μm/pixel |
-| **Total cells** | 125 (run02-054) to 168 (run03-055) |
-| **Good cells** | 89% (quality ≥ 0.15 threshold) |
+### What is Suite2p?
 
-### File Locations
+[**Suite2p**](https://github.com/MouseLand/suite2p) is the industry-standard software for processing two-photon imaging data. It's maintained by the Stringer Lab and used in hundreds of neuroscience papers worldwide.
 
-**All data is in a shared lab repository** (read access for students):
-```
-/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/
-├── processed/                              ← Fluorescence & cell info
-│   ├── TSeries-03042024-run01-053/
-│   ├── TSeries-03042024-run02-054/        ← Used in this exercise
-│   │   ├── F.npy
-│   │   ├── Fneu.npy
-│   │   ├── iscell.npy
-│   │   ├── stat.npy
-│   │   ├── ops.npy
-│   │   └── TSeries-03042024-run02-054*.ome.tif
-│   └── ... (more runs)
-│
-└── Suite2P-inferred-spikes/                ← OASIS spike inference
-    ├── TSeries-03042024-run02-054/
-    │   └── spks.npy
-    └── ... (more runs)
-```
+**What Suite2p does**:
+1. **ROI detection**: By default, Suite2p detects cells using **Sparsery** — a matrix decomposition that looks for spatially-compact, temporally-sparse sources directly in the movie (i.e. it exploits *when* and *where* fluorescence changes over time, not just a single static image). This is the method that produced the ROIs in this dataset. Suite2p also offers a deep-learning option (Cellpose, an anatomical segmentation model), but that's a separate, optional mode — it was **not** used to generate this dataset's ROIs.
+2. **Fluorescence extraction**: Measures raw fluorescence (F) from each detected ROI
+3. **Neuropil measurement**: Measures fluorescence (Fneu) from the surrounding neuropil tissue
+4. **Spike inference**: Applies its OASIS-based spike inference algorithm to recover spike times from fluorescence
+5. **Quality scoring**: Assigns a quality-of-detection index to every cell, rating confidence that each ROI is a real neuron
 
-### Dataset Quality Summary
+The result is a folder full of `.npy` files containing all the processed data.
 
-| Run | Cells | Duration | Quality (% ≥0.15) | Avg Spikes/Cell | Recommended For |
-|-----|-------|----------|-------------------|-----------------|-----------------|
-| run02-054 | 125 | 5 min | 89% | 227 | ⭐ **START HERE** — balanced & well-documented |
-| run06-058 | 99 | 10 min | 99% | 448 | Long recording, high quality |
-| run03-055 | 168 | 5 min | 99% | 227 | Most cells, excellent quality |
-| run05-057 | 90 | 5 min | 98% | 227 | Small population, clean |
-| run08-060 | 84 | 10 min | 100% | 448 | Perfect quality, short population |
-| run09-061 | 78 | 10 min | 77% | 452 | Lower quality (edge case study) |
+### The Files You'll Load
 
-**Recommended: run02-054** — This is the "goldilocks" dataset: balanced cell count (125), moderate duration (5 min), good quality (89%), well-documented in tutorials. Start here.
+**All the data in this exercise has already been processed by Suite2p.** You're not reimplementing Suite2p — you're learning how its pieces work by implementing and validating them yourself. Here's what each file contains:
 
-### Example: Loading Data in Python
+**`F.npy`** — **Raw fluorescence** from each detected ROI
+- Shape: 125 cells × 4535 frames
+- What it is: The sum of all photons detected in each ROI during each frame
+- Range: ~170–5550 counts/frame (varies across cells and time)
+- Why you need it: This is the actual measurement you'll work with. It's noisy, slow (calcium dynamics), and contaminated (neuropil signal mixed in)
+
+**`Fneu.npy`** — **Neuropil fluorescence** (the contamination signal)
+- Shape: Same as F (125 cells × 4535 frames)
+- What it is: Fluorescence from the tissue surrounding each ROI, measured from a surround mask (padded around the ROI, excluding other detected cells)
+- Range: ~350–3730 counts/frame (often as bright or brighter than the cell signal!)
+- How Suite2p measures it: For each ROI, Suite2p builds a "neuropil mask" by: (1) padding the ROI outward, (2) growing a square region until it contains enough non-cell pixels, (3) excluding pixels from other detected ROIs, and (4) averaging fluorescence across these neuropil pixels
+- Why you need it: This is the contamination you'll remove in Exercise 1. By measuring Fneu separately, Suite2p gives you a direct estimate of the neuropil signal contaminating F. Without correction, ROIs show much higher correlation with each other due to spatially-invariant neuropil surges affecting all cells simultaneously. The correction Suite2p applied to this dataset is **F' = F - 0.7 × Fneu** — and 0.7 isn't a one-off choice, it's Suite2p's actual built-in default neuropil coefficient (`neucoeff`).
+
+**`iscell.npy`** — **Cell quality scores**
+- Shape: 125 cells × 2 columns
+- Contains: A quality-of-detection index assigned to every ROI by Suite2p's built-in classifier (column 0: quality score, column 1: predicted class label)
+- Threshold: Use iscell[:, 0] >= 0.15 to filter for likely "real cells" and exclude artifacts
+- Why you need it: Not all detected ROIs are real neurons. Some are neuropil artifacts or background noise. This quality score helps you distinguish real cells from false detections. At threshold 0.15, you keep ~90% of the 125 cells.
+
+**`spks.npy`** — **Suite2p's spike inference** (the reference you'll compare against)
+- Shape: 125 cells × 4535 frames
+- What it is: Spike amplitudes recovered by Suite2p's OASIS-based spike inference algorithm, run with a single fixed calcium timescale (τ = 1.0s) for every cell
+- Range: 0–1543. Note this is **not** a sparse 0/1 spike train — many frames have small nonzero values, so a raw ">0" threshold captures far more than just "obvious" spike events. Comparing against it requires peak-detection, not simple thresholding.
+- Why you need it: This is your benchmark. After you implement deconvolution in Exercise 2, you'll compare your spike detections against this reference.
+- **Location note**: These spikes are stored in a separate directory: `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes/TSeries-03042024-run02-054/spks.npy`.
+
+**`stat.npy`** — **ROI metadata**
+- Shape: 125 cells
+- What it contains: For each ROI — pixel coordinates (`xpix`, `ypix`), median location (`med`), size (`npix`), and other shape descriptors
+- Why you need it: To visualize where cells are in the image, filter by size/location, or (in Exercise 3) compare your own detections against Suite2p's ROI positions
+
+**`ops.npy`** — **Processing parameters and the field-of-view image**
+- Contains Suite2p's run configuration (frame rate, neuropil coefficient, kernel timescale, etc.) plus `ops['meanImg']` — the actual 2D mean fluorescence image of the field of view (1024×1024 pixels for this dataset)
+- Why you need it: This is what Exercise 3 uses as the "picture" to detect cells in. **`F.mean(axis=1)` is not a substitute** — F is already one trace per detected cell, not spatial pixel data.
+
+### How You'll Compare to Suite2p
+
+In each exercise, you'll implement a piece of the Suite2p pipeline and validate it:
+
+- **Exercise 1**: You'll apply Suite2p's own neuropil correction (α = 0.7) and measure how much it reduces contamination.
+- **Exercise 2**: You'll implement L1-regularized deconvolution with per-cell calcium kernels. Suite2p uses a different algorithm (OASIS) with one fixed kernel for every cell. You'll compare your spikes against Suite2p's and measure agreement.
+- **Exercise 3**: You'll write a simple single-image threshold detector. Suite2p's default detects cells using movie dynamics (Sparsery), not a single static image. You'll see why that distinction matters.
+
+**The goal**: Not to beat Suite2p (it's already well-engineered), but to understand how it works and develop intuition for algorithm design. When you later use Suite2p for your own research, you'll know exactly what it's doing under the hood.
+
+### Loading Data in Python
 
 ```python
 import numpy as np
@@ -226,10 +314,11 @@ F = np.load(run_dir / 'F.npy')              # (125, 4535) — raw fluorescence
 Fneu = np.load(run_dir / 'Fneu.npy')        # (125, 4535) — neuropil fluorescence
 iscell = np.load(run_dir / 'iscell.npy')    # (125, 2) — cell quality scores
 stat = np.load(run_dir / 'stat.npy', allow_pickle=True)  # (125,) — ROI locations
+ops = np.load(run_dir / 'ops.npy', allow_pickle=True).item()  # dict — run config + meanImg
 
-# Load OASIS-inferred spikes from separate directory
+# Load Suite2p's spike inference from a separate directory
 spks_dir = Path('/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes')
-spks = np.load(spks_dir / 'TSeries-03042024-run02-054' / 'spks.npy')  # (125, 4535) — OASIS spikes
+spks = np.load(spks_dir / 'TSeries-03042024-run02-054' / 'spks.npy')  # (125, 4535)
 
 # Filter by quality (iscell ≥ 0.15)
 good_cells = iscell[:, 0] >= 0.15
@@ -242,49 +331,44 @@ print(f"Good cells: {F_good.shape[0]} ({100*F_good.shape[0]/F.shape[0]:.1f}%)")
 print(f"Frames: {F.shape[1]} ({F.shape[1]/15/60:.1f} minutes at 15 Hz)")
 ```
 
-### Why run02-054?
-
-This recording provides:
-- **Balanced cell count** (125 cells) — not too many to overwhelm, not too few to miss patterns
-- **Moderate length** (5 min = 4535 frames @ 15 Hz) — enough activity, short runtime for testing
-- **Good quality** (89% pass iscell ≥ 0.15) — mostly clean data, some edge cases to learn from
-- **Well-documented** — used in tutorial examples and reference implementations
-- **Diverse activity** — neurons with varied spike rates (from quiet to very active)
-
-If you want to explore other datasets, they're all in the same directory structure—just replace `run02-054` with `run03-055`, `run06-058`, etc.
-
-### What Raw Two-Photon Imaging Looks Like
-
-Here's an example of what you're analyzing — raw two-photon imaging with overlaid ROIs and neural activity:
-
-![Two-Photon Imaging with ROIs and Activity](assets/imaging_preview.gif)
-
-*Raw imaging frames (gray) with cyan ROI circles (Suite2p detected neurons) and red/orange activity heatmap (fluorescence).*
-
-**What you're seeing:**
-- **Black/gray background** — raw intensity (median-subtracted imaging)
-- **Cyan circles** — detected ROIs from Suite2p (cell bodies, ~20-40 μm diameter)
-- **Red/orange heatmap** — neural activity (fluorescence, gradually accumulating)
-
-**Key observations:**
-1. ROIs are precisely positioned on bright cell bodies
-2. Neuropil (surrounding area) is visible but dimmer
-3. Activity pulses within ROI circles correspond to neural spikes
-4. Heatmap gradually accumulates to show activity patterns over time
-
-This is the raw data you'll be working with — images like these are where your algorithms will detect ROIs, measure fluorescence, and estimate spike times.
-
 ---
 
 # The Exercises: Warmup → Main → Challenge
 
-This exercise has **three parts, designed to build from simple to complex**:
+⚠️ **These exercises are designed for students new to Python and data analysis**. They guide you through real research pipelines step-by-step.
 
-1. **Exercise 1 (Warmup)**: Neuropil Removal — understand preprocessing
-2. **Exercise 2 (Main)**: Spike Deconvolution — solve the inverse problem
-3. **Exercise 3 (Challenge)**: ROI Detection — learn why deep learning matters
+**If you already know Python/data science**: Feel free to use your own approaches! Work with different data, implement advanced variants, parallelize code, or extend the exercises. Use any AI tool you prefer (Cline, Claude, ChatGPT, etc.) — the goal is learning the neuroscience and algorithms, not following a script.
 
-You can do all three (4 hours), or focus on Exercise 2 if time-limited (90 minutes).
+---
+
+This exercise has **three parts, designed to build from simple to complex** — plus a Step 0 to get oriented first:
+
+0. **Step 0**: Load the data and look at it — no analysis yet
+1. **Exercise 1 (Warmup)**: Neuropil Removal — apply correction, compute metrics, visualize
+2. **Exercise 2 (Main)**: Spike Deconvolution — solve inverse problem, estimate kernels per-cell, compare to Suite2p
+3. **Exercise 3 (Challenge)**: ROI Detection — understand why movie dynamics beat a static-image threshold
+
+You can do all three, or focus on Exercise 2 for depth.
+
+---
+
+## Step 0: Look at the Data First
+
+Before Exercise 1, just load the files and look at them — no analysis, nothing to get "right."
+
+**Deliverable**: Load `F`, `Fneu`, and `ops['meanImg']`. Plot a few raw fluorescence traces over time, and plot the mean image with cell locations marked (from `stat`, the `med` field).
+
+**What you should see**:
+
+![Raw fluorescence traces](assets/step0_raw_traces.png)
+
+*A few cells' raw fluorescence over 100 seconds. Notice the slow rises and falls — not sharp spikes. That slowness is the whole problem Exercise 2 solves.*
+
+![Mean image with detected cells](assets/step0_mean_image_with_rois.png)
+
+*The actual field of view, averaged over the whole recording, with cyan dots marking Suite2p's detected cells. A grainy grayscale image with round bright blobs, dark blood-vessel-like curves, and dots landing on most (not all) of the bright blobs.*
+
+If your plots look roughly like this, you're oriented and ready for Exercise 1.
 
 ---
 
@@ -292,54 +376,42 @@ You can do all three (4 hours), or focus on Exercise 2 if time-limited (90 minut
 
 ### The Problem
 
-When you image a neuron with two-photon microscopy, the fluorescence you measure comes from **two sources**:
+Fluorescence measured from a cell body comes from **two sources**: the cell itself (signal) and the surrounding tissue — dendrites, glia, other cells (contamination). Light from that surrounding tissue bleeds into your measurement because the microscope's optics aren't perfectly sharp.
 
-1. **The target cell body** — the neuron you want to study (signal)
-2. **Surrounding neuropil** — dendrites, glia, and nearby tissue outside your ROI (contamination)
+$$F_{\text{obs}} = F_{\text{cell}} + \alpha \times F_{\text{neuropil}} + \text{noise}$$
 
-Your measured fluorescence is:
+Without correcting for this, a burst of activity in the surrounding tissue can look like activity in your cell — even if the cell did nothing.
 
-$$F_{\text{obs}} = F_{\text{cell}} + \alpha_{\text{true}} \times F_{\text{neuropil}} + \text{noise}$$
-
-The contamination fraction $\alpha_{\text{true}}$ is typically 0.5–0.8, meaning **half to 80% of what you measure might not be from your target cell**. This corrupts spike detection and all downstream analysis.
+**How Suite2p estimates the contamination**: You can't separate "cell" from "neuropil" within the ROI's own pixels, so Suite2p measures the neuropil separately, from pixels just outside the ROI (excluding any other detected cells). This gives `Fneu` — an estimate of the same contaminating signal that's leaking into `F`. That's why subtracting a scaled copy of it (`F - α × Fneu`) removes the contamination.
 
 ### The Existing Solution
 
-Suite2p measures neuropil fluorescence (`Fneu`) separately, then applies a standard correction factor $\alpha = 0.7$:
+Suite2p measured this dataset's neuropil and applied its default correction:
 
 $$F_{\text{corrected}} = F_{\text{obs}} - 0.7 \times F_{\text{neuropil}}$$
 
-This works on average, but **0.7 is not optimal for all datasets**. Cellular packing density, dye distribution, and optical properties vary, so the true optimal $\alpha$ can range from 0.5 to 0.9. Your task: **optimize α for your specific data**.
+α = 0.7 is Suite2p's actual built-in default (`neucoeff`) — confirmed from this dataset's own processing settings, not a guess. You'll apply that same correction and measure how well it works.
 
-### Your Goals
+### Deliverable
 
-1. **Implement** the correction algorithm: `F_corrected = F - alpha * Fneu`
-2. **Optimize** α by measuring three quality metrics across a range (0.2–1.2)
-3. **Validate** by plotting before/after and measuring correlation reduction
-4. **Understand** why dataset-specific correction beats one-size-fits-all
+Apply `F_corrected = F - 0.7 * Fneu` to the good-quality cells (`iscell ≥ 0.15`), then show it worked: report the correlation between F and Fneu before vs. after correction, and plot a few example cells.
 
-### Deliverables
+⚠️ Compute the correlation **per cell, then average** — not by pooling every cell's data into one big correlation. Pooling mixes in brightness differences *between* cells (which the correction can't fix) and makes the contamination look worse than it is.
 
-- [ ] Load F and Fneu from real data
-- [ ] Loop over α ∈ [0.2, 1.2] and compute correlations, variance, Fano factor
-- [ ] Plot all three metrics vs α; identify the minimum
-- [ ] Visualize before/after correction on example cells
-- [ ] Document your optimal α and correlation reduction %
+**Expected result** (this dataset):
+- Mean per-cell correlation: **0.44 → -0.13** (a **71.6%** reduction)
+- The correction overshoots slightly rather than landing exactly on zero — an honest result, not a claim that α = 0.7 is perfect for every dataset
+- Corrected traces look visibly cleaner, with sharper individual events
 
-**Benchmarks**:
-- Correlation reduction: ~89% (from r ≈ 0.7 to r ≈ 0.1)
-- Optimal α: ~0.547 ± 0.05
-- Corrected variance: 2–3× higher than raw
+### What You'll See
 
-### Expected Results
+![Neuropil correction: raw vs. corrected traces](assets/exercise1_neuropil_correction.png)
 
-![Neuropil Correction Before/After](assets/real_stage3_correction.png)
+*Raw fluorescence (blue) and neuropil (red, dashed) for three example cells (left); corrected fluorescence (green) and the same neuropil trace (right). The corrected traces track the neuropil much less closely.*
 
-*Top: raw fluorescence (contaminated, slow drift). Bottom: corrected (sharp, clean spikes visible).*
+![Per-cell correlation before vs. after correction](assets/exercise1_per_cell_correlation.png)
 
-![Correlation Analysis](assets/correlation_before_after.png)
-
-*Left: raw F vs Fneu highly correlated (contamination). Right: corrected F vs Fneu uncorrelated (contamination removed).*
+*Every one of the 113 good cells, not just the average. Left: each cell's own F-vs-Fneu correlation before (blue) and after (green) correction, sorted by the raw value. Right: the same data as a scatter — every point falls below the y=x line, meaning the correction reduces correlation for every single cell, not just on average.*
 
 ---
 
@@ -347,511 +419,65 @@ This works on average, but **0.7 is not optimal for all datasets**. Cellular pac
 
 ### The Problem
 
-Calcium indicators respond **slowly** to action potentials. A spike (1 ms depolarization) generates a fluorescence transient that rises over 10–100 ms and decays over 100–1000 ms. When neurons fire in bursts, responses overlap, making individual spikes invisible in the raw trace.
+Calcium indicators respond **slowly** to spikes. A single spike (~1 ms) triggers a fluorescence rise over 10–100 ms that decays over 100–1000 ms. When neurons fire in bursts, those slow responses overlap and individual spikes become invisible in the raw trace.
 
-The forward model: $$F(t) = \text{baseline} + \sum_{\text{spikes}} h(t - t_s) + \text{noise}$$
+$$F(t) = \text{baseline} + \sum_{\text{spikes}} h(t - t_s) + \text{noise}, \qquad h(t) = \exp(-t/\tau)$$
 
-Given observed $F(t)$, you must **invert** this to recover spike times.
+Given the observed $F(t)$, you must **invert** this to recover the spike times.
 
 ### The Existing Solution
 
-Suite2p uses **OASIS** — a fast exponential-filtering algorithm that:
-- Assumes exponential decay: $h(t) = \exp(-t/\tau)$ with $\tau \approx 400$ ms
-- Applies non-negative deconvolution with minimal sparsity
-- Runs in milliseconds per cell
+Suite2p's algorithm, **OASIS**, assumes exponential decay and runs non-negative deconvolution in milliseconds per cell. For this dataset, it was run with **one fixed τ = 1.0s for every cell** — a simplification, since real neurons don't all share identical calcium kinetics.
 
-OASIS works empirically well but is a **heuristic**. Your task: **formulate and solve the inverse problem explicitly**.
+**Your task**: solve the same inverse problem explicitly, using a kernel timescale you estimate separately for each cell.
 
-### Your Goals
+### Deliverable 1 — Synthetic Validation
 
-1. **Formulate** the problem as convex optimization: recover spikes that explain fluorescence
-2. **Validate** on synthetic data (you know ground truth)
-3. **Optimize** regularization and threshold parameters
-4. **Apply** to real data and compare against OASIS
-5. **(Optional)** Estimate kernel per-cell instead of using fixed global kernel
+**Method**: Generate a spike train from a Poisson process (~1 Hz, with a refractory period so spikes don't land right on top of each other), convolve it with an exponential calcium kernel (τ = 1.0s) to make synthetic fluorescence, and add shot + Gaussian noise. Recover the spikes by solving the inverse problem, then score sensitivity/precision/F1 against the ground truth you made.
 
-### Deliverables
+⚠️ Two things that will silently break this:
+- **Use a non-negative Lasso** (`sklearn.linear_model.Lasso(positive=True)`) for the actual L1 sparsity penalty — not `scipy.optimize.nnls` plus a smoothness penalty. Spikes are sparse impulses, not smooth curves; a smoothness penalty fights against recovering them.
+- **Match peaks, not frames.** The recovered trace spreads across several frames around each real event. Find peaks in it and match each to the nearest true spike within a small tolerance window — comparing frame-by-frame manufactures false positives out of one event's own shoulders.
 
-**Synthetic Validation** (Parts A–C):
-- [ ] Generate ground-truth spike trains (Poisson, refractory period)
-- [ ] Convolve with calcium kernel, add realistic noise
-- [ ] Implement NNLS solver with λ regularization
-- [ ] Sweep λ ∈ [0.0001, 0.01] and threshold τ ∈ [0.01, 0.15]
-- [ ] Measure: sensitivity, precision, F1 vs ground truth
-- [ ] Plot recovered vs true spikes on example traces
+### Deliverable 2 — Real Data
 
-**Real Data** (Part D):
-- [ ] Apply NNLS to real fluorescence (subset: 20 cells × 1500 frames)
-- [ ] Load OASIS spikes (`spks.npy`) as reference
-- [ ] Define detection thresholds: OASIS > 0, NNLS > 0.1
-- [ ] Compute Jaccard Index: (both find) / (either finds)
-- [ ] Plot side-by-side comparison on low/medium/high activity cells
-- [ ] Document agreement % and disagreement patterns
+**Method**: For each real cell, estimate its own τ from the autocovariance of its fluorescence trace (fit the exponential decay slope across several lags — don't assume Suite2p's fixed 1.0s applies to every cell). Deconvolve real fluorescence with that cell's own kernel using the same Lasso approach as Deliverable 1, then score agreement against Suite2p's spike inference (`spks.npy`) using the **same sensitivity/precision/F1 metrics as Deliverable 1**.
 
-**Benchmarks**:
-- Synthetic: F1 ~0.78 (sensitivity 100%, precision ~65%)
-- Real data: Jaccard ~97% agreement with OASIS
+⚠️ Suite2p's spikes are *not* a sparse 0/1 train — thresholding at ">0" isn't meaningful. Find peaks in it the same way you find peaks in your own trace, and don't switch to a different metric like Jaccard, which hides whether you're over- or under-detecting relative to Suite2p.
 
-### Implementation Guide
+**Expected result** (this dataset):
+- **Deliverable 1 (synthetic, SNR ≈ 3)**: F1 ≈ 0.34 (sensitivity 32%, precision 37%) — modest. Deconvolving overlapping, noisy transients is a genuinely hard problem; don't expect near-perfect recovery from a basic solver.
+- **Deliverable 2 (real data)**: per-cell τ ranges ~0.17–2.3s, median ≈ 0.41s — clearly not one-size-fits-all, and mostly below Suite2p's fixed 1.0s. Against Suite2p's spike inference: F1 ≈ 0.73 (sensitivity 88%, precision 68%) — better agreement than the synthetic case, likely because real transients are larger relative to noise, and per-cell kernels fit real heterogeneity better than one global kernel.
 
-### Part A: Generate Synthetic Data
+### Implementation Notes
 
-Create ground-truth spike trains and generate fluorescence:
+- **The inverse problem**: minimize $\frac{1}{2n}\|F - Hs\|_2^2 + \lambda\|s\|_1$ subject to $s \geq 0$, where $H$ is the Toeplitz convolution matrix built from the kernel
+- **Use L1 sparsity, not smoothness.** Most timepoints have no spike — a penalty on $s$ itself matches that. A penalty on *differences between neighbors* pushes toward smooth, spread-out solutions, the opposite of what a spike train looks like.
+- **Match peaks, not frames.** The kernel spans many frames, so one real event produces a broad bump — comparing that bump frame-by-frame against a single ground-truth frame manufactures false positives out of its own shoulders.
+- **Estimating γ**: for exponential decay, $\text{acov}[\text{lag}] \propto \gamma^{\text{lag}}$ where $\gamma = \exp(-1/(\tau \cdot \text{frame\_rate}))$. Fit $\log(\text{acov})$ vs. lag over several lags — one two-point ratio is too noisy for a single real trace.
+- **Tune `alpha` (the L1 penalty) by scale.** Too large and the solver returns all zeros; too small and it overfits noise. Real fluorescence (hundreds–thousands of counts) needs a much larger `alpha` than the synthetic data in Deliverable 1 to have a comparable effect.
 
-1. **Define spike train** (ground truth)
+### What You'll See
 
-$$\mathbf{s}_{\text{true}} \in \{0, 1\}^{n_{\text{frames}}}$$
+**Synthetic validation (Deliverable 1):**
 
-- Poisson spike rate: $\lambda = 0.05$ spikes/frame (realistic for real neurons)
-- Refractory period: 5 frames minimum between spikes
-- Example: $\mathbf{s}_{\text{true}} = [0, 1, 0, 0, 0, 1, 0, \ldots]$
+![Synthetic spike recovery](assets/exercise2_synthetic_validation.png)
 
-2. **Convolve with calcium kernel**
+*Top: noisy vs. noiseless synthetic fluorescence. Middle two rows: true spikes vs. recovered spikes. Bottom: overlay. Recovery is imperfect — some true events are missed, and the recovered trace has spurious small peaks — consistent with F1 ≈ 0.34.*
 
-$$\mathbf{F}_{\text{clean}} = \mathbf{h} \otimes \mathbf{s}_{\text{true}} + \text{baseline}$$
+**Per-cell kernel estimation (part of Deliverable 2):**
 
-where:
-- $\mathbf{h} = \text{exponential decay: } h[t] = \exp(-t/\tau_{\text{decay}})$
-- $\tau_{\text{decay}} \approx 400$ ms (calibrated to real indicator)
-- $\text{baseline} \approx 100$-$200$ counts (resting fluorescence)
+![Per-cell tau distribution](assets/exercise2_kernel_estimation.png)
 
-3. **Add realistic noise**
+*Left: distribution of estimated τ across 30 real cells, compared to the τ = 1.0s Suite2p used for all of them. Right: example autocovariance curves showing the decay used to fit each cell's τ.*
 
-$$\mathbf{F}_{\text{obs}} = \mathbf{F}_{\text{clean}} + \varepsilon$$
+**Real data comparison (Deliverable 2):**
 
-$$\varepsilon \sim \mathcal{N}(0, \sigma^2) \text{ where } \sigma \text{ depends on:}$$
+![Low activity cell comparison](assets/exercise2_real_comparison_low.png)
+![Medium activity cell comparison](assets/exercise2_real_comparison_medium.png)
+![High activity cell comparison](assets/exercise2_real_comparison_high.png)
 
-- Photon shot noise: $\sigma_{\text{shot}} = \sqrt{\mathbf{F}_{\text{clean}}} / \text{gain}$
-- Gaussian noise: $\sigma_{\text{gaussian}} \approx 5$-$10$ counts
-- Total: $\sigma = \sqrt{\sigma_{\text{shot}}^2 + \sigma_{\text{gaussian}}^2}$
-
-### Part B: Cull and Preprocess Synthetic Data
-
-Filter traces for quality:
-
-1. **Remove bad traces**
-   - Traces with $\text{SNR} < \text{threshold}$ (too noisy)
-   - Traces with negative values (unphysical)
-   - Traces with unrealistic baseline ($< 50$ or $> 500$)
-
-2. **Standardize traces**
-   - Subtract baseline: $\mathbf{F}_{\text{std}} = \mathbf{F}_{\text{obs}} - \text{median}(\mathbf{F}_{\text{obs}})$
-   - Optional: normalize by median (for scale invariance)
-
-3. **Quality metrics**
-   - $\text{SNR} = \frac{\text{std}(\mathbf{F}_{\text{clean}})}{\text{std}(\varepsilon)}$
-   - Keep traces with $\text{SNR} > 2$
-   - Keep traces with at least 5 spikes
-
-### Part C: Recover the Generative Data (Inverse Problem)
-
-Apply NNLS to recover spikes:
-
-1. **Implement NNLS solver**
-
-$$\min_{\mathbf{s}} \left\|\mathbf{F}_{\text{obs}} - \mathbf{H}\mathbf{s}\right\|_2^2 + \lambda\|\mathbf{s}\|_1$$
-
-$$\text{subject to: } \mathbf{s} \geq 0$$
-
-where $\mathbf{H}$ is the Toeplitz convolution matrix: $H_{ij} = h_{i-j}$ for $i \geq j$, else 0
-
-2. **Optimize regularization parameter λ**
-   - Test range: $\lambda \in [0.0001, 0.01]$
-   - For each $\lambda$, measure false positive + false negative rates
-   - Choose $\lambda$ that minimizes total error
-
-3. **Threshold and binarize**
-
-$$\mathbf{s}_{\text{recovered}} = (\text{NNLS}_{\text{output}} > \tau) \, ? \, 1 : 0$$
-
-- Test threshold range: $\tau \in [0.01, 0.15]$
-- Choose $\tau$ that maximizes $F_1 = \frac{2 \times (\text{precision} \times \text{recall})}{\text{precision} + \text{recall}}$
-
-4. **Evaluate against ground truth**
-
-Compare $\mathbf{s}_{\text{recovered}}$ vs $\mathbf{s}_{\text{true}}$:
-
-- Sensitivity = $\frac{\text{TP}}{\text{TP} + \text{FN}}$ ← % of true spikes found
-- Precision = $\frac{\text{TP}}{\text{TP} + \text{FP}}$ ← % of recovered spikes correct
-- $F_1 = \frac{2(\text{sens} \times \text{prec})}{\text{sens} + \text{prec}}$ ← harmonic mean
-- Timing error = $\text{mean}(|t_{\text{recovered}} - t_{\text{true}}|)$ ← how accurate timing is
-
-where TP/FP/FN defined as:
-- TP: recovered spike within 1 frame of true spike
-- FP: recovered spike > 1 frame from any true spike
-- FN: true spike > 1 frame from any recovered spike
-
-### Part D: Apply to Real Data and Compare
-
-⚠️ **Note**: Running NNLS on all 125 cells × 4535 frames is computationally expensive (~5-10 minutes). For faster testing, use a subset: first 20 cells × 1500 frames (~10-15 seconds).
-
-1. **Run NNLS on real fluorescence** — Your method on real neural data
-   - Load real F (125 cells × 4535 frames)
-   - _(Optional: use subset for faster iteration — first 20 cells, first 1500 frames)_
-   - Use optimal λ and threshold learned from synthetic data
-   - Extract spike times for all cells (or your subset)
-
-2. **Load OASIS reference**
-   - OASIS is Suite2p's spike inference algorithm (non-negative deconvolution)
-   - Load from: `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/Suite2P-inferred-spikes/TSeries-03042024-run02-054/spks.npy`
-   - Same cells, same recording, same neuropil correction (α = 0.7)
-
-3. **Define a Performance Metric**
-
-You need to decide how to measure agreement between NNLS and OASIS. Here are common approaches:
-
-**Threshold: When is a spike "detected"?**
-
-Different methods have different output scales:
-- **OASIS** outputs: continuous amplitudes, often with sparse sharp peaks
-  - Typical threshold: amplitude $> 0$ (any positive value is a spike)
-- **NNLS** outputs: continuous amplitudes with broader, smoother waveforms due to regularization
-  - Typical threshold: amplitude $> 0.1$ (need stronger signal to count as a spike)
-
-You must define consistent thresholds to make a fair comparison.
-
-**Metric: How to measure agreement?**
-
-Once you have binary spike times (detected or not), compute agreement for each cell:
-
-$$\text{Jaccard Index} = \frac{\text{spikes both detect}}{\text{spikes either detects}} = \frac{\text{both}}{\text{both} + \text{NNLS\_only} + \text{OASIS\_only}}$$
-
-- **both**: frame where both methods detected a spike
-- **NNLS_only**: frame where only NNLS detected
-- **OASIS_only**: frame where only OASIS detected
-
-Alternative metrics using ground truth (if available):
-
-$$\text{Sensitivity} = \frac{\text{TP}}{\text{TP} + \text{FN}} \quad \text{(% of true spikes found)}$$
-
-$$\text{Precision} = \frac{\text{TP}}{\text{TP} + \text{FP}} \quad \text{(% of detected spikes correct)}$$
-
-$$F_1 = \frac{2 \times \text{Sensitivity} \times \text{Precision}}{\text{Sensitivity} + \text{Precision}} \quad \text{(harmonic mean)}$$
-
-where TP = true positive (spike correctly detected), FP = false positive (detected but no true spike), FN = false negative (true spike missed)
-
-### Comparison Results
-
-Here's an example comparison using the recommended thresholds (OASIS > 0, NNLS > 0.1):
-
-**Low Activity Cell** — Sparse firing, mostly quiet
-![NNLS vs OASIS: Low Activity](assets/nnls_vs_oasis_low_activity.png)
-
-**Medium Activity Cell** — Moderate spike rate, typical behavior
-![NNLS vs OASIS: Medium Activity](assets/nnls_vs_oasis_medium_activity.png)
-
-**High Activity Cell** — Frequent spikes, busty neuron
-![NNLS vs OASIS: High Activity](assets/nnls_vs_oasis_high_activity.png)
-
-**Key Observations:**
-- **Green (OASIS)**: Sparse, sharp peaks. Minimal regularization.
-- **Orange (NNLS)**: Broader waveforms. L1 smoothness regularization makes spikes less sharp.
-- **Agreement**: ~97% Jaccard similarity on this dataset (both methods find ~the same spikes)
-
-The differences in spike shape reflect different optimization objectives, not preprocessing tricks:
-- OASIS: $\min_s \|\mathbf{F} - \mathbf{h} \otimes \mathbf{s}\|_2^2$ (raw squared error)
-- NNLS: $\min_s \|\mathbf{F} - \mathbf{h} \otimes \mathbf{s}\|_2^2 + \lambda \text{(smoothness)}$ (with regularization)
-
-**Your task**: Choose your thresholds, compute a metric for your NNLS results, and interpret whether NNLS is competitive with OASIS on this dataset.
-
----
-
-## Advanced: Per-Cell Kernel Estimation (Exercise 2 Extension)
-
-### The Problem: Fixed vs. Adaptive Kernels
-
-In Parts A–D, we use a **global fixed kernel** $h(t) = \exp(-t/\tau)$ with $\tau \approx 400$ ms for all cells. This assumes all neurons have identical calcium indicator kinetics.
-
-In reality, indicator kinetics vary cell-to-cell due to:
-- Expression level differences
-- Indicator saturation (high-firing neurons)
-- Imaging depth (attenuation changes dye brightness)
-
-**The naive fix** — jointly learn the kernel and spikes together (CNMF-style alternation) — is non-convex and slow.
-
-**The smart fix** — estimate the kernel once per cell, then freeze it and solve NNLS:
-
-### The Insight: Autocovariance Recovers Decay
-
-Between spikes, the calcium trace follows an AR(1) model:
-
-$$c(t) = \gamma \, c(t-1) \quad \text{where} \quad \gamma = \exp(-1/\tau_{\text{decay}})$$
-
-The lag-1 autocovariance of the fluorescence trace directly yields $\gamma$:
-
-$$\hat{\gamma} = \frac{\text{Cov}(F_t, F_{t-1})}{\text{Var}(F_t)}$$
-
-Sparse spiking adds small bias (underestimates $\gamma$ by ~1–2% at realistic firing rates), but this is negligible for a fixed-kernel approximation.
-
-### Implementation
-
-**Step 1: Estimate γ per cell**
-
-```python
-def estimate_gamma(F, baseline_subtract=True):
-    """Quick AR(1) decay estimate via autocovariance ratio."""
-    F = F.astype(float)
-    if baseline_subtract:
-        F = F - np.median(F)
-    
-    F_centered = F - F.mean()
-    c0 = np.dot(F_centered, F_centered) / len(F)      # lag-0 (variance)
-    c1 = np.dot(F_centered[:-1], F_centered[1:]) / (len(F) - 1)  # lag-1
-    
-    gamma = c1 / c0
-    return np.clip(gamma, 0.5, 0.999)  # sanity bounds
-```
-
-**Step 2: Build cell-specific kernel and Toeplitz matrix**
-
-```python
-from scipy.linalg import toeplitz
-
-def build_kernel(gamma, n_frames):
-    """AR(1) decay kernel: h[t] = γ^t."""
-    h = gamma ** np.arange(n_frames)
-    return h
-
-def build_H(h, n_frames):
-    """Toeplitz convolution matrix."""
-    col = h[:n_frames]
-    row = np.zeros(n_frames)
-    row[0] = h[0]
-    return toeplitz(col, row)
-```
-
-**Step 3: Freeze kernel, solve NNLS**
-
-```python
-from scipy.optimize import nnls
-
-def deconvolve_per_cell(F, gamma):
-    """NNLS with estimated per-cell kernel."""
-    n = len(F)
-    h = build_kernel(gamma, n)
-    H = build_H(h, n)
-    s, _ = nnls(H, F - np.median(F))
-    return s
-```
-
-**Usage:**
-
-```python
-for cell_idx in range(n_cells):
-    F = F_good[cell_idx, :]
-    gamma_hat = estimate_gamma(F)      # estimate once per cell
-    s_hat = deconvolve_per_cell(F, gamma_hat)  # freeze kernel, solve
-```
-
-### Validation Plan
-
-1. **Synthetic validation**: Generate synthetic data with known τ_decay, run `estimate_gamma`, recover τ back from γ, and check accuracy across noise levels.
-
-2. **Benchmark F1 scores**: On synthetic Part C data, replace the fixed global kernel with per-cell estimated kernels. Re-run the λ/threshold sweep and confirm F1/sensitivity/precision still meet (~0.78 F1, 100% sensitivity, ~65% precision) — or characterize shifts.
-
-3. **Add L1 sparsity** (optional): Replace `nnls()` with `sklearn.linear_model.Lasso(positive=True, alpha=...)` to match the $\lambda\|\mathbf{s}\|_1$ term more faithfully. Re-tune λ range and compare false-positive rates.
-
-4. **Real data comparison**: Run on subset (20 cells × 1500 frames):
-   - Estimate γ per cell from real F
-   - Run NNLS with each cell's own frozen kernel
-   - Compare against OASIS using Jaccard index
-   - Check if per-cell kernels improve agreement over fixed global kernel
-
-5. **Stationarity check**: Estimate γ on first vs. second half of a few traces. Flag cells with unstable γ (motion artifacts, low SNR) before trusting output.
-
-6. **Scale up**: Replace dense Toeplitz $\mathbf{H}$ with sparse banded matrix (e.g., `scipy.sparse.diags`) before running full 125 cells × 4535 frames.
-
-### Expected Outcome
-
-Per-cell kernel estimation should:
-- **Improve or maintain Jaccard agreement** with OASIS (likely neutral to small positive effect)
-- **Reduce per-cell variance** in deconvolution quality (better predictions for cells with unusual kinetics)
-- **Enable detection of kinetic outliers** (cells with unusual γ, suggesting technical issues)
-
-### Known Gaps
-
-- **No joint optimization**: This assumes kinetics are stationary within the trace (true for 5–10 min recordings, worth spot-checking).
-- **Dense matrix cost**: $\mathbf{H}$ is $n_{\text{frames}} \times n_{\text{frames}}$ — fine for subsets, slow for full 4535 frames. Sparsity fixes this.
-- **L1 vs. thresholding**: Pure NNLS has no L1 penalty; post-hoc thresholding is ad-hoc. Lasso would be cleaner but slower.
-
----
-
-### The Generative Model (Forward Problem)
-
-When a neuron fires an action potential, the membrane depolarizes for ~1 ms. But calcium indicators respond slowly, with rise times of 10-100 ms and decay times of 100-1000 ms. The measured fluorescence is:
-
-$$F(t) = \text{baseline} + \sum_{\tau} s(\tau) \otimes h(t - \tau) + \varepsilon(t)$$
-
-Breaking this down:
-
-**1. Spike train** $s(t)$: Binary sequence of action potentials
-
-$$s(t) \in \{0, 1\} \text{ for each timestep } t$$
-
-- $s(t) = 1$ means a spike occurred
-- $s(t) = 0$ means no spike
-
-**2. Calcium kernel** $h(t)$: Impulse response of the indicator
-
-$$h(t) = \alpha \exp(-t/\tau_{\text{decay}}) - \beta \exp(-t/\tau_{\text{rise}}) \text{ for } t \geq 0$$
-
-$$h(t) = 0 \text{ for } t < 0$$
-
-where:
-- $\tau_{\text{decay}} \approx 300$-$500$ ms (indicator decay)
-- $\tau_{\text{rise}} \approx 50$-$200$ ms (indicator rise)
-- $\alpha, \beta$ scale the amplitude
-
-**3. Convolution** ($\otimes$): Each spike is "blurred" by the kernel
-
-$$\text{convolved}(t) = \sum_{\tau} s(\tau) \times h(t - \tau)$$
-
-In matrix form (discrete time):
-
-$$\mathbf{F} = \mathbf{H} \mathbf{s} + \mathbf{b} + \varepsilon$$
-
-where:
-- $\mathbf{F}$: observed fluorescence ($n_{\text{frames}}$,)
-- $\mathbf{H}$: convolution matrix ($n_{\text{frames}} \times n_{\text{frames}}$, Toeplitz structure)
-- $\mathbf{s}$: spike amplitudes ($n_{\text{frames}}$,)
-- $\mathbf{b}$: baseline (scalar or estimated)
-- $\varepsilon$: noise $\sim \mathcal{N}(0, \sigma^2)$
-
-**4. Noise model** $\varepsilon(t)$: Measurement and biological noise
-
-$$\varepsilon(t) \sim \mathcal{N}(0, \sigma^2) \text{ independent Gaussian noise at each timestep}$$
-
-$\sigma$ depends on:
-- Photon shot noise: $\propto \sqrt{F_{\text{clean}}}$
-- Electrical noise (amplifier): $\approx 5$-$10$ counts
-- Biological variability
-
-### The Inverse Problem: NNLS Deconvolution
-
-Given observed fluorescence $\mathbf{F}$ and kernel $\mathbf{h}$, recover spike times $\mathbf{s}$:
-
-$$\min_{\mathbf{s}} \|\mathbf{F} - \mathbf{H}\mathbf{s}\|_2^2 + \lambda \|\mathbf{s}\|_1$$
-
-$$\text{subject to: } \mathbf{s} \geq 0$$
-
-**Term breakdown**:
-
-- **$\|\mathbf{F} - \mathbf{H}\mathbf{s}\|_2^2$**: Least squares fit (minimize residual)
-  - Measures how well recovered spikes explain the data
-  - Units: (fluorescence counts)²
-  
-- **$\lambda \|\mathbf{s}\|_1$**: L1 regularization (sparsity penalty)
-  - $\lambda$ controls tradeoff: fit quality vs sparsity
-  - High $\lambda$ → fewer spikes (assumes most timepoints have no spike)
-  - Low $\lambda$ → more spikes (allows overfitting)
-  
-- **$\mathbf{s} \geq 0$**: Non-negativity constraint
-  - Biological: spike amplitudes can't be negative
-  - Prevents unphysical solutions
-
-**Solution approach**:
-1. Form the optimization problem with objective and constraint
-2. Use iterative solver (e.g., proximal gradient descent, coordinate descent)
-3. Iterate: minimize residual while maintaining $\mathbf{s} \geq 0$ and sparsity
-4. Output: spike amplitudes $\mathbf{s}$ at each timepoint
-
-**Post-processing**: Convert amplitudes to binary spike times
-
-$$\mathbf{s}_{\text{binary}} = \begin{cases} 1 & \text{if } s_i > \text{threshold} \\ 0 & \text{otherwise} \end{cases}$$
-
-where threshold is typically:
-- $\text{threshold} = 0.08$ (optimal for this data)
-- $\text{threshold} = \text{np.percentile}(\mathbf{s}, 90)$ (automatic)
-
-### NNLS vs OASIS
-
-| Aspect | NNLS | OASIS |
-|--------|------|-------|
-| **Algorithm** | Least squares + L1 penalty | Exponential filtering + thresholding |
-| **Speed** | Slow (~seconds/cell) | Fast (~ms/cell) |
-| **False positives** | ~34% | ~15% |
-| **False negatives** | ~0% | ~5% |
-| **Parameters** | λ (regularization), threshold | c (decay constant), threshold |
-| **Interpretability** | Direct inverse problem | Heuristic filtering |
-| **When to use** | Teaching, validation, understanding | Production, large datasets |
-| **Code complexity** | ~50 lines | ~1000 lines (production OASIS) |
-
-**Why OASIS is better in production**:
-- Exponential filtering is fast and parallelizable
-- Pre-computed lookup tables optimize parameters
-- Better empirical performance on real data
-- Handles non-stationarity (changing baseline) better
-
-**Why NNLS for learning**:
-- Clear mathematical interpretation
-- Each step is understandable
-- Easy to add constraints (e.g., refractory period)
-- Good for validation (gold standard on synthetic data)
-
-### Milestones
-
-**Part A: Synthetic Data Validation**
-- [ ] Generate synthetic spike trains
-- [ ] Convolve with calcium kernel to create fluorescence
-- [ ] Add noise to match real data characteristics
-- [ ] Cull bad traces (remove/filter outliers)
-- [ ] Implement NNLS algorithm
-- [ ] Recover spikes from synthetic fluorescence
-- [ ] Measure: sensitivity, precision, F1 score vs ground truth
-- [ ] Plot recovered vs true spikes for example traces
-
-**Benchmark (Synthetic)**:
-- F1 score: ~0.78
-- Sensitivity: 100% (catch all spikes)
-- Precision: ~65% (some false positives)
-
-**Part B: Real Data Analysis**
-- [ ] Apply NNLS to real fluorescence data
-- [ ] Load OASIS spike times from Suite2p (`spks.npy`)
-- [ ] Compare NNLS vs OASIS on example cells
-- [ ] Measure agreement (how often do they find the same spikes?)
-- [ ] Plot side-by-side comparison
-
-**Benchmark (Real Data)**:
-- NNLS finds similar spike patterns to OASIS
-- Differences expected due to algorithm design
-- Visual agreement on major events
-
-### Expected Results
-
-**Synthetic data validation (what to expect):**
-
-![Synthetic Spike Recovery](assets/synthetic_stage4_spikes.png)
-
-*Left: ground truth spikes (you created these). Right: NNLS recovered spikes. With optimal λ and threshold, recovery should be nearly perfect on synthetic data.*
-
-**Real data comparison (NNLS vs OASIS):**
-
-![NNLS vs OASIS Comparison](assets/synthetic_stage5_comparison.png)
-
-*Top: NNLS spike times (your method). Bottom: OASIS (Suite2p's algorithm). Agreement on major events, differences on marginal spikes.*
-
-**Detailed comparison:**
-
-![Spike Method Comparison](assets/spike_method_comparison.png)
-
-*Side-by-side traces: NNLS vs OASIS on real neurons. Look for:*
-- *Similar spike timing on obvious events*
-- *NNLS tends to be more sensitive (finds more spikes)*
-- *OASIS is more conservative (fewer false positives)*
-- *Biggest disagreements on low-SNR cells*
-
-**Key findings**:
-- Synthetic validation: F1 ~0.78, Sensitivity 100%, Precision ~65%
-  - Perfect recovery on clean synthetic data (proof of concept)
-  - Precision loss due to noise (as expected)
-  
-- Real data comparison: NNLS agrees with OASIS ~75-80%
-  - Both methods find same major spike events
-  - Differences on marginal/ambiguous events
-  - NNLS more sensitive, OASIS more specific
-  
-- Conclusion: Validate on synthetic data → ensures algorithm is correct; apply to real data → understand practical performance ✓
+*Fluorescence, Suite2p's spike inference, and this exercise's per-cell deconvolution, for a low-, medium-, and high-activity cell. Agreement is generally good on clear events, with some differences in amplitude and on marginal/ambiguous events — consistent with F1 ≈ 0.73.*
 
 ---
 
@@ -859,123 +485,42 @@ where threshold is typically:
 
 ### The Problem
 
-Before analyzing a neuron, you must **find it** in raw imaging data. The challenge:
+Before analyzing a neuron, you must **find it** in the raw imaging data. The challenge:
 
-1. **Neurons are small** (~20–40 μm, but pixels are ~0.37 μm)
+1. **Neurons are small** (~10–15 μm in this dataset, but pixels are ~0.4 μm)
 2. **Neuropil is bright** — sometimes brighter than cell bodies
-3. **Noise everywhere** — shot noise, autofluorescence, motion
-4. **Cells overlap** — dendrites cross, tissue is dense
-
-A simple approach (threshold + connected components) will:
-- Catch most neurons (sensitivity ~88%)
-- Generate many false positives (precision ~23%)
-- **Teach you why deep learning is necessary**
+3. **Noise is everywhere** — shot noise, autofluorescence, motion artifacts
+4. **Cells overlap** — dendrites cross, tissue is densely packed
 
 ### The Existing Solution
 
-Suite2p uses:
-1. **Statistical filtering** on mean image with morphological constraints
-2. **Deep learning via Cellpose** — a convolutional network trained on thousands of labeled neurons
+Suite2p's default detector (**Sparsery**) doesn't just look at one static image — it decomposes the whole movie, searching for sources that are spatially compact *and* temporally sparse (active in only a fraction of frames). That's fundamentally more information than a single mean image contains: a real cell's pixels light up and dim together over time in a way that matches its own activity, while bright neuropil regions may be steady, diffuse, or driven by a different (shared, population-wide) timecourse.
 
-Cellpose achieves ~95% sensitivity and ~95% precision by learning what "real cells" look like. Simple thresholding can't distinguish cells from noise.
+In this exercise, you'll build something much simpler — a detector that only looks at **one static image** (the time-averaged fluorescence) — and see how much performance that costs you.
 
-### Your Goals
+### Deliverable
 
-1. **Implement** a simple ROI detector to understand the baseline
-2. **Measure** sensitivity and precision vs Suite2p ground truth
-3. **Analyze** false positives: where and why do they occur?
-4. **Understand** the limitation: why deep learning wins where simple methods fail
+Detect cells from the static mean image alone (smooth → threshold → connected components), match your detections against Suite2p's ROI centers by pixel distance, and report sensitivity and precision. Then look at your false positives and false negatives: where do they cluster, and why?
 
-### Deliverables
+⚠️ Use `ops['meanImg']` (from `ops.npy`) for the image — **not** `F.mean(axis=1)`, which gives one number per already-detected cell, not a spatial image at all.
 
-- [ ] Load raw imaging data (mean or std across time)
-- [ ] Implement: Gaussian smooth → threshold → connected components
-- [ ] Extract ROI properties: center, size, circularity, brightness
-- [ ] Compare to Suite2p detected ROIs (`stat.npy`)
-- [ ] Compute sensitivity, precision, F1 metrics
-- [ ] Visualize: your detections vs Suite2p on the image
-- [ ] Analyze false positives: spatial distribution, size/brightness histograms
-- [ ] Document: why does simple thresholding fail?
+**Expected result** (this dataset):
+- Sensitivity: **42.4%** (you catch fewer than half of Suite2p's cells)
+- Precision: **33.5%** (roughly two-thirds of your detections are not real cells)
+- Both numbers are modest — a single static image genuinely doesn't contain enough information to separate cells from bright neuropil reliably
 
-**Benchmarks**:
-- Sensitivity: ~87.6% (detect most real neurons)
-- Precision: ~23.2% (most detections are false positives)
-- False positives: concentrated in bright neuropil and motion artifacts
+### What You'll See
 
-### Expected Analysis
+![ROI detection comparison](assets/exercise3_roi_detection_results.png)
 
-### Mathematical Underpinnings
+*Left: the raw mean fluorescence image. Middle: the smoothed threshold mask. Right: your detections (yellow) overlaid on Suite2p's ROI positions (cyan) — note the mismatches in both directions.*
 
-#### The Problem
+### What You'll Discover
 
-When imaging neurons, you measure fluorescence from:
-1. **The target cell (F)** — what you want
-2. **Surrounding neuropil (Fneu)** — contamination
+After implementing a simple detector, you'll see:
+1. **You miss a substantial fraction of real cells** — a single mean image doesn't separate all cells from background as cleanly as you'd hope
+2. **A large share of your detections are false positives** — bright neuropil regions and imaging artifacts pass the same threshold real cells do
+3. **Static brightness alone is a weak signal**: some real cells aren't much brighter than their surroundings in the time-averaged image, even though they are clearly active over time
+4. **Why Suite2p's default beats this**: by using the whole movie (not one static image), Suite2p can distinguish sources based on *when* they're active, not just how bright they are on average — information a single-image threshold simply doesn't have access to
 
-The signal is: **F_measured = F + α_true × Fneu + noise**
-
-#### The Solution
-
-Correct by subtracting the neuropil:
-
-```
-F_corrected = F - α × Fneu
-```
-
-**Why this works**: The neuropil (Fneu) is optically isolated during Suite2p processing, so it's a pure estimate of contamination. Multiplying by α (typically 0.7) removes the average contamination without over-correcting.
-
-#### Why α ≠ 0.7 for All Datasets
-
-The contamination fraction varies based on:
-- **Cellular packing density** — dense tissue = more neuropil signal
-- **Dye distribution** — uneven loading = different α
-- **Optical properties** — scattering depth affects contamination
-
-**Solution**: Learn α from the data itself by minimizing:
-
-```
-α* = argmin(corr(F - α×Fneu, Fneu))
-```
-
-We want F and Fneu uncorrelated; when they are, contamination is removed.
-
-### Milestones
-
-- [ ] Load fluorescence and neuropil from .npy files
-- [ ] Implement correction: `F_corrected = F - alpha * Fneu`
-- [ ] Test alpha values from 0.2 to 1.2
-- [ ] Compute before/after correlations (z-scored)
-- [ ] Find optimal alpha (minimizes F vs Fneu correlation)
-- [ ] Plot corrected vs raw traces for example cells
-
-**Benchmark**: 
-- Correlation reduction: ~89% (±5%)
-- Optimal alpha: ~0.55 (not 0.7!)
-- Visual inspection: Raw shows Fneu contamination, corrected is clean
-
-### Expected Results
-
-**Before/After Correction:**
-
-![Neuropil Correction Before/After](assets/real_stage3_correction.png)
-
-*Top row: raw fluorescence (pink/red, contaminated by neuropil). Bottom row: corrected fluorescence (blue/white, clean). Note:*
-- *Raw traces show slow drift and neuropil contamination*
-- *Corrected traces are sharper and less contaminated*
-- *Spike-like events are more visible after correction*
-
-**Correlation Analysis (Why α matters):**
-
-![Correlation Before/After](assets/correlation_before_after.png)
-
-*Left: raw F vs Fneu are highly correlated (r ≈ 0.6-0.8), indicating contamination. Right: corrected F vs Fneu are uncorrelated (r ≈ 0.0), proving contamination removed.*
-
-**Optimal α Factor Discovery:**
-
-![Raw vs Corrected Population](assets/raw_vs_corrected_all_cells.png)
-
-*Heatmaps of all 111 neurons: raw (left) vs corrected (right, with α ≈ 0.547). Observe:*
-- *Raw: dominated by slow neuropil oscillations (orange/red background)*
-- *Corrected: sparse, sharp spike events (blue baseline with sharp peaks)*
-- *Visual proof that optimal α removes contamination*
-
+This teaches you: **the information you throw away (here, all of the movie's temporal structure) often matters more than the algorithm you use on what's left.**
