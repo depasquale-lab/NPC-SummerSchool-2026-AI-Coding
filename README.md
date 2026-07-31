@@ -3,8 +3,6 @@
 
 **Roadmap**: This document has two parts. First, **setup** (getting onto the SCC, installing an AI coding assistant, cloning the repo) — skip ahead if you've already done this. Second, **the three exercises** themselves, starting at [The Exercises](#the-exercises-warmup--main--challenge). If you just want to know what you'll actually be doing, jump there now and come back for setup afterward.
 
-💬 **First thing to do once Cline is set up**: ask it to read this README (`README.md`) in full. That gives it the full context for everything you'll ask it afterward, instead of guessing from a single pasted snippet.
-
 ### What This Exercise Is About
 
 You'll learn to analyze **real two-photon calcium imaging recordings** from awake mice using Python and AI-assisted coding (Cline + Gemini). The data comes from cortical neurons expressing genetically-encoded calcium indicators (jRGECO1a), imaged at 15 Hz during spontaneous activity.
@@ -91,7 +89,7 @@ You'll have **three working data-processing pipelines**, each self-contained:
 
 ### Step 1: Access the SCC and Launch VS Code Server
 
-⚠️ **Browser requirement**: Use **Chrome** or **Safari** for best compatibility with OnDemand and VS Code Server.
+❗ **Browser requirement**: Use **Chrome** or **Safari** for best compatibility with OnDemand and VS Code Server.
 
 Go to: [https://scc-ondemand2.bu.edu/](https://scc-ondemand2.bu.edu/)
 
@@ -112,7 +110,7 @@ Once logged in to OnDemand:
    | **Additional modules to load** | python3/3.13.8 |
    | **Working Directory** | `/projectnb/npcr25/students/username` |
 
-   ⚠️ **Important**: Replace `username` with your SCC username (same as your BU login)
+   ❗ **Important**: Replace `username` with your SCC username (same as your BU login)
 
 4. Click **Launch**
 5. Wait for the session to start
@@ -148,6 +146,8 @@ Once installed and configured:
 
 💬 Before trusting Cline with anything real, give it a trivial first task — e.g. "print the numbers 1 to 10" — just to confirm the API key and model are actually wired up correctly. Cheaper to catch a setup problem now than mid-exercise.
 
+❗ **Once that sanity check passes, ask Cline to read this README (`README.md`) in full.** That gives it the full context for everything you'll ask it afterward, instead of guessing from a single pasted snippet.
+
 ### Usage Limits
 
 You get **500 requests per day** with `gemini-3.1-flash-lite`. Check usage at:
@@ -179,7 +179,7 @@ Cline will execute these commands for you. Then verify it worked by running `ls 
 
 💬 If "branch," "clone," or "commit" are unfamiliar git vocabulary, ask Cline to explain them using this exact situation as the example — much more concrete than a generic git tutorial.
 
-**Important**: After you complete progress on each exercise, commit and push your work:
+❗ **Important**: After you complete progress on each exercise, commit and push your work:
 
 ```bash
 git add -A
@@ -243,7 +243,7 @@ This is a real two-photon calcium imaging recording: a live, awake mouse, imaged
 
 That raw video has already been run through **Suite2p** (see below) to produce the processed files you'll actually load: cell locations, per-cell fluorescence traces, and a reference set of inferred spike times. You're working from Suite2p's *output*, not the raw video — except in Exercise 3, which also uses the field-of-view image (`ops['meanImg']`). The raw movie exists on disk too, if you're curious (see paths below), but you won't need it for any exercise.
 
-**Use this dataset — everyone should.** `TSeries-03042024-run02-054` is what generated every number, benchmark, and figure in this README. If you use a different dataset, your results won't match what's described here (fine if you're exploring on your own, but the "results should look something like this" sections won't apply).
+❗ **Use this dataset — everyone should.** `TSeries-03042024-run02-054` is what generated every number, benchmark, and figure in this README. If you use a different dataset, your results won't match what's described here (fine if you're exploring on your own, but the "results should look something like this" sections won't apply).
 
 **Where the data lives**:
 - **Processed** (what you'll actually load): `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/processed/TSeries-03042024-run02-054/`
@@ -295,7 +295,7 @@ The result is a folder full of `.npy` files containing all the processed data.
 - What it is: Fluorescence from the tissue surrounding each ROI, measured from a surround mask (padded around the ROI, excluding other detected cells)
 - Range: ~350–3730 counts/frame (often as bright or brighter than the cell signal!)
 - How Suite2p measures it ([docs](https://suite2p.readthedocs.io/en/latest/roiextraction/)): For each ROI, Suite2p builds a "neuropil mask" by: (1) padding the ROI outward by a fixed number of pixels to exclude the cell itself, (2) growing a rectangular (or circular, if configured) region until it contains enough non-cell pixels, (3) excluding pixels belonging to other detected ROIs, and (4) averaging fluorescence across these neuropil pixels
-- Why you need it: This is the contamination you'll remove in Exercise 1. By measuring Fneu separately, Suite2p gives you a direct estimate of the neuropil signal contaminating F. Without correction, ROIs show much higher correlation with each other due to spatially-invariant neuropil surges affecting all cells simultaneously. The correction Suite2p applied to this dataset is **F' = F - 0.7 × Fneu**. Suite2p's own documentation shows 0.7 as the example `neucoeff` value, and this dataset's own saved processing settings confirm 0.7 is exactly what was used here.
+- Why you need it: This is the contamination you'll remove in Exercise 1. By measuring Fneu separately, Suite2p gives you a direct estimate of the neuropil signal contaminating F. Without correction, ROIs show much higher correlation with each other due to spatially-invariant neuropil surges affecting all cells simultaneously. The correction Suite2p applied to this dataset is **F' = F - 0.7 × Fneu**. ✅ Suite2p's own documentation shows 0.7 as the example `neucoeff` value, and this dataset's own saved processing settings confirm 0.7 is exactly what was used here — not a guess.
 
 **`iscell.npy`** — **Cell quality scores**
 - Shape: 125 cells × 2 columns
@@ -365,7 +365,7 @@ print(f"Frames: {F.shape[1]} ({F.shape[1]/15/60:.1f} minutes at 15 Hz)")
 
 # The Exercises: Warmup → Main → Challenge
 
-⚠️ **These exercises are designed for students new to Python and data analysis**. They guide you through real research pipelines step-by-step.
+❗ **These exercises are designed for students new to Python and data analysis**. They guide you through real research pipelines step-by-step.
 
 **If you already know Python/data science**: Feel free to use your own approaches! Work with different data, implement advanced variants, parallelize code, or extend the exercises. Use any AI tool you prefer (Cline, Claude, ChatGPT, etc.) — the goal is learning the neuroscience and algorithms, not following a script.
 
@@ -430,7 +430,7 @@ Suite2p measured this dataset's neuropil and applied this correction ([docs](htt
 
 $$F_{\text{corrected}} = F_{\text{obs}} - 0.7 \times F_{\text{neuropil}}$$
 
-α = 0.7 (Suite2p calls this `neucoeff`) is exactly what this dataset's own saved processing settings show was used — not a guess or an approximation. You'll apply that same correction and measure how well it works.
+✅ α = 0.7 (Suite2p calls this `neucoeff`) is exactly what this dataset's own saved processing settings show was used — not a guess or an approximation. You'll apply that same correction and measure how well it works.
 
 ### Deliverable
 
@@ -477,7 +477,7 @@ Given the observed $F(t)$, you must **invert** this to recover the spike times �
 
 ### The Existing Solution
 
-Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/deconvolution/)), assumes exponential decay and runs non-negative deconvolution in milliseconds per cell. Its own function signature is `dcnv.oasis(F=Fc, batch_size=batch_size, tau=tau, fs=fs)` — `F` there is the *entire array of traces for every cell in the recording*, and `tau` is passed once, as a single scalar, for that whole call. It's a global setting for the recording, not something computed per cell. This dataset's own saved processing settings confirm it was actually run with **one fixed τ = 1.0s for every cell** — a simplification, since real neurons don't all share identical calcium kinetics.
+Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/deconvolution/)), assumes exponential decay and runs non-negative deconvolution in milliseconds per cell. Its own function signature is `dcnv.oasis(F=Fc, batch_size=batch_size, tau=tau, fs=fs)` — `F` there is the *entire array of traces for every cell in the recording*, and `tau` is passed once, as a single scalar, for that whole call. It's a global setting for the recording, not something computed per cell. ✅ This dataset's own saved processing settings confirm it was actually run with **one fixed τ = 1.0s for every cell** — a simplification, since real neurons don't all share identical calcium kinetics.
 
 **This isn't a problem unique to Suite2p, or invented for this exercise.** The other major calcium-imaging pipeline, **CNMF** ([Pnevmatikakis et al.](https://github.com/epnev/constrained-foopsi), implemented in [CaImAn](https://caiman.readthedocs.io/en/latest/core_functions.html)), solves essentially the same inverse problem in its `constrained_foopsi` deconvolution step: minimize total spike mass (a sparsity-promoting objective, the same role your L1 penalty plays), subject to non-negativity and the reconstruction fitting the trace within its noise level. OASIS was originally developed as a much faster, *exact* solver for that same constrained problem, before Suite2p adopted it as its default. So the inverse problem you're solving by hand in this exercise isn't a simplified toy version of something real methods do differently — it's the actual mathematical core that both major pipelines (Suite2p and CNMF/CaImAn) build their spike inference around. OASIS and your Lasso solver are two different algorithms for solving that same problem, not two different problems.
 
