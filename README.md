@@ -289,6 +289,8 @@ The result is a folder full of `.npy` files containing all the processed data.
 - What it is: The sum of all photons detected in each ROI during each frame
 - Range: ~170–5550 counts/frame (varies across cells and time)
 - Why you need it: This is the actual measurement you'll work with. It's noisy, slow (calcium dynamics), and contaminated (neuropil signal mixed in)
+- ⚠️ **This is genuinely uncorrected — Suite2p never saves a neuropil-corrected version of `F` anywhere.** It does compute one internally (`Fc = F - neucoeff × Fneu`), right before running its own spike deconvolution — that's the `Fc` passed to `dcnv.oasis()` mentioned in Exercise 2. So Suite2p's own `spks.npy` benchmark *is* based on corrected fluorescence, but the corrected trace itself is used once and discarded, never written to disk. `F.npy` is the same raw input Suite2p itself started from.
+- ⚠️ There's also an `F_chan2.npy` and `Fneu_chan2.npy` in this same directory — a second imaging channel that was never actually recorded, so both are all-zeros (confirmed). Load `F.npy`/`Fneu.npy`, not the `_chan2` versions.
 
 **`Fneu.npy`** — **Neuropil fluorescence** (the contamination signal)
 - Shape: Same as F (125 cells × 4535 frames)
