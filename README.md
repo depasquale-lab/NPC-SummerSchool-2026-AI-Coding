@@ -3,6 +3,8 @@
 
 **Roadmap**: This document has two parts. First, **setup** (getting onto the SCC, installing an AI coding assistant, cloning the repo) — skip ahead if you've already done this. Second, **the three exercises** themselves, starting at [The Exercises](#the-exercises-warmup--main--challenge). If you just want to know what you'll actually be doing, jump there now and come back for setup afterward.
 
+💬 **First thing to do once Cline is set up**: ask it to read this README (`README.md`) in full. That gives it the full context for everything you'll ask it afterward, instead of guessing from a single pasted snippet.
+
 ### What This Exercise Is About
 
 You'll learn to analyze **real two-photon calcium imaging recordings** from awake mice using Python and AI-assisted coding (Cline + Gemini). The data comes from cortical neurons expressing genetically-encoded calcium indicators (jRGECO1a), imaged at 15 Hz during spontaneous activity.
@@ -384,6 +386,8 @@ Before Exercise 1, just load the files and look at them — no analysis, nothing
 
 If your plots look roughly like this, you're oriented and ready for Exercise 1.
 
+💬 Not sure how to load an `.npy` file, or what `ops['meanImg']` even is? Ask Cline — that's exactly what it's there for.
+
 ---
 
 ## Exercise 1: Neuropil Removal (Warmup)
@@ -412,6 +416,8 @@ Apply `F_corrected = F - 0.7 * Fneu` to the good-quality cells (`iscell ≥ 0.15
 
 ⚠️ Compute the correlation **per cell, then average** — not by pooling every cell's data into one big correlation. Pooling mixes in brightness differences *between* cells (which the correction can't fix) and makes the contamination look worse than it is.
 
+💬 If your correlation isn't dropping the way you'd expect, describe what you're seeing to Cline and ask it to help you debug — this is a common place to get stuck on an off-by-one or an unintended broadcast.
+
 **Expected result** (this dataset):
 - Mean per-cell correlation: **0.44 → -0.13** (a **71.6%** reduction)
 - The correction overshoots slightly rather than landing exactly on zero — an honest result, not a claim that α = 0.7 is perfect for every dataset
@@ -421,7 +427,7 @@ Apply `F_corrected = F - 0.7 * Fneu` to the good-quality cells (`iscell ≥ 0.15
 
 ![Neuropil correction: raw vs. corrected traces](assets/exercise1_neuropil_correction.png)
 
-*Raw fluorescence (blue) and neuropil (red, dashed) for three example cells (left); corrected fluorescence (green) and the same neuropil trace (right). The corrected traces track the neuropil much less closely.*
+*Three example cells (rows), each shown two ways on the same z-scored scale: raw F vs. Fneu (left) and corrected F vs. Fneu (right). In the left column, the background wobble in blue tracks the red dashed neuropil trace closely. In the right column, that shared wobble is largely gone — the sharp transients that remain in green are essentially independent of Fneu.*
 
 ![Per-cell correlation before vs. after correction](assets/exercise1_per_cell_correlation.png)
 
@@ -454,6 +460,8 @@ Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/
 ⚠️ Two things that will silently break this:
 - **Use a non-negative Lasso** (`sklearn.linear_model.Lasso(positive=True)`) for the actual L1 sparsity penalty — not `scipy.optimize.nnls` plus a smoothness penalty. Spikes are sparse impulses, not smooth curves; a smoothness penalty fights against recovering them.
 - **Match peaks, not frames.** The recovered trace spreads across several frames around each real event. Find peaks in it and match each to the nearest true spike within a small tolerance window — comparing frame-by-frame manufactures false positives out of one event's own shoulders.
+
+💬 This is the most mathematically involved exercise — if the inverse problem, the Toeplitz matrix, or why the L1 penalty matters doesn't click, ask Cline to walk through it with a concrete small example (e.g. 3 spikes, a short kernel). Also a good exercise to ask Cline to help tune `alpha` if your solver returns all zeros or way too many spikes.
 
 ### Deliverable 2 — Real Data
 
@@ -526,10 +534,14 @@ Detect cells from the static mean image alone (smooth → threshold → connecte
 
 ⚠️ Use `ops['meanImg']` (from `ops.npy`) for the image — **not** `F.mean(axis=1)`, which gives one number per already-detected cell, not a spatial image at all.
 
+💬 If your sensitivity/precision look nowhere close to the numbers below (e.g. both near 0%), that's usually a sign something upstream is off — wrong image, wrong coordinate order, or a threshold that's degenerate. Describe your numbers to Cline and it can help you narrow down where.
+
+**Tuning tip**: a loose threshold (e.g. the 80th percentile) lets huge swaths of diffuse neuropil through alongside real cells, and a bare `size > 10 pixels` filter keeps tiny noise specks. Two changes make a real difference without adding any new method: (1) push the threshold much higher — only the brightest ~1% of pixels reliably separates cell bodies from neuropil background in this dataset — and (2) filter components by a size range matching real cells (this dataset's own ROIs span 31–1173 pixels), not just a low floor.
+
 **Expected result** (this dataset):
-- Sensitivity: **42.4%** (you catch fewer than half of Suite2p's cells)
-- Precision: **33.5%** (roughly two-thirds of your detections are not real cells)
-- Both numbers are modest — a single static image genuinely doesn't contain enough information to separate cells from bright neuropil reliably
+- With an 80th-percentile threshold and a bare `size > 10` filter: sensitivity **42.4%**, precision **33.5%**
+- With a 99th-percentile threshold and a size filter matching real cell dimensions (20–1500 pixels): sensitivity **51.2%**, precision **68.8%** — a substantial improvement from tuning the same simple method, not a different algorithm
+- Even tuned, this remains well below Suite2p's Sparsery — a single static image still doesn't contain enough information to separate cells from bright neuropil as reliably as a movie-aware method can
 
 ### Deliverable 2 — Does "Matched" Mean "Same Signal"?
 
@@ -537,11 +549,11 @@ Position-matching only checks whether your detection's *center* landed near a Su
 
 **Method**: For every matched pair from Deliverable 1, pull your detection's own raw pixel-averaged trace directly from the movie (`ops.npy`'s registered TIFF, not anything Suite2p precomputed), and correlate it against Suite2p's own `F` trace for that same cell. Then look at a few of your best- and worst-correlated matches side by side — both the image (do the two ROI outlines actually overlap?) and the traces (do they move together?).
 
-**Expected result** (this dataset):
-- Across the 53 matched pairs: mean correlation **0.37**, median **0.32**, range **[0.04, 0.95]**
-- 17 of 53 matches (32%) have correlation > 0.5 — genuinely capturing the same signal
-- 20 of 53 matches (38%) have correlation < 0.2 — spatially "close enough" but not the same signal
-- Looking at the worst matches, the two ROI outlines are often visibly non-overlapping — the 30-pixel matching threshold in Deliverable 1 is loose enough to count some clearly-different blobs as a "match"
+**Expected result** (this dataset, using the tuned detector from Deliverable 1):
+- Across the 64 matched pairs: mean correlation **0.48**, median **0.43**, range **[0.10, 0.93]**
+- 28 of 64 matches (44%) have correlation > 0.5 — genuinely capturing the same signal
+- 10 of 64 matches (16%) have correlation < 0.2 — spatially "close enough" but not the same signal
+- Better detection (Deliverable 1's tuning) didn't just find more matches — it found *better* ones: both the fraction of high-correlation matches and low-correlation matches improved. Looking at the remaining poor matches, the two ROI outlines are often still visibly non-overlapping — the 30-pixel matching threshold is loose enough to count some clearly-different blobs as a "match"
 
 ### What You'll See
 
@@ -559,7 +571,7 @@ After implementing a simple detector, you'll see:
 1. **You miss a substantial fraction of real cells** — a single mean image doesn't separate all cells from background as cleanly as you'd hope
 2. **A large share of your detections are false positives** — bright neuropil regions and imaging artifacts pass the same threshold real cells do
 3. **Static brightness alone is a weak signal**: some real cells aren't much brighter than their surroundings in the time-averaged image, even though they are clearly active over time
-4. **"Correct" isn't binary**: even among your position-matched "true positives," a third have essentially no signal agreement with the cell they supposedly matched — sensitivity and precision alone hide this
+4. **"Correct" isn't binary**: even among your position-matched "true positives," some have essentially no signal agreement with the cell they supposedly matched — sensitivity and precision alone hide this
 5. **Why Suite2p's default beats this**: by using the whole movie (not one static image), Suite2p can distinguish sources based on *when* they're active, not just how bright they are on average — information a single-image threshold simply doesn't have access to
 
 This teaches you: **the information you throw away (here, all of the movie's temporal structure) often matters more than the algorithm you use on what's left — and a metric that only checks position can hide exactly how much you're missing.**
