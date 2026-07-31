@@ -231,7 +231,7 @@ This is a real two-photon calcium imaging recording: a live, awake mouse, imaged
 
 That raw video has already been run through **Suite2p** (see below) to produce the processed files you'll actually load: cell locations, per-cell fluorescence traces, and a reference set of inferred spike times. You're working from Suite2p's *output*, not the raw video — except in Exercise 3, which also uses the field-of-view image (`ops['meanImg']`). The raw movie exists on disk too, if you're curious (see paths below), but you won't need it for any exercise.
 
-**Use this dataset — everyone should.** `TSeries-03042024-run02-054` is what generated every number, benchmark, and figure in this README. If you use a different dataset, your results won't match what's described here (fine if you're exploring on your own, but the "Expected result" sections won't apply).
+**Use this dataset — everyone should.** `TSeries-03042024-run02-054` is what generated every number, benchmark, and figure in this README. If you use a different dataset, your results won't match what's described here (fine if you're exploring on your own, but the "results should look something like this" sections won't apply).
 
 **Where the data lives**:
 - **Processed** (what you'll actually load): `/projectnb2/npcr25/projects/two_photon/Ex1_jRGECO1a_ResonantScanning/processed/TSeries-03042024-run02-054/`
@@ -418,12 +418,12 @@ Apply `F_corrected = F - 0.7 * Fneu` to the good-quality cells (`iscell ≥ 0.15
 
 💬 If your correlation isn't dropping the way you'd expect, describe what you're seeing to Cline and ask it to help you debug — this is a common place to get stuck on an off-by-one or an unintended broadcast.
 
-**Expected result** (this dataset):
+**Results should look something like this** (this dataset):
 - Mean per-cell correlation: **0.44 → -0.13** (a **71.6%** reduction)
 - The correction overshoots slightly rather than landing exactly on zero — an honest result, not a claim that α = 0.7 is perfect for every dataset
 - Corrected traces look visibly cleaner, with sharper individual events
 
-### What You'll See
+### What Your Results Might Look Like
 
 ![Neuropil correction: raw vs. corrected traces](assets/exercise1_neuropil_correction.png)
 
@@ -447,7 +447,7 @@ Given the observed $F(t)$, you must **invert** this to recover the spike times.
 
 ### The Existing Solution
 
-Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/deconvolution/)), assumes exponential decay and runs non-negative deconvolution in milliseconds per cell. Its documentation shows τ = 1.0s as an example calcium timescale, and this dataset's own saved processing settings confirm it was actually run with **one fixed τ = 1.0s for every cell** — a simplification, since real neurons don't all share identical calcium kinetics.
+Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/deconvolution/)), assumes exponential decay and runs non-negative deconvolution in milliseconds per cell. Its own function signature is `dcnv.oasis(F=Fc, batch_size=batch_size, tau=tau, fs=fs)` — `F` there is the *entire array of traces for every cell in the recording*, and `tau` is passed once, as a single scalar, for that whole call. It's a global setting for the recording, not something computed per cell. This dataset's own saved processing settings confirm it was actually run with **one fixed τ = 1.0s for every cell** — a simplification, since real neurons don't all share identical calcium kinetics.
 
 **Why not just reimplement OASIS?** OASIS is a specialized, carefully optimized algorithm from its own dedicated research codebase — reproducing it exactly is a substantial engineering project on its own, not what this exercise is asking of you. Instead, you'll solve the *same underlying inverse problem* — recover spikes from a blurred fluorescence trace — with a simpler, more general tool (L1-regularized least squares) that you can build from first principles. That's the point: understanding the problem OASIS solves and building a working (if less polished) solution yourself, not reproducing OASIS's internals.
 
@@ -457,8 +457,17 @@ Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/
 
 **Method**: Generate a spike train from a Poisson process (~1 Hz, with a refractory period so spikes don't land right on top of each other), convolve it with an exponential calcium kernel (τ = 1.0s) to make synthetic fluorescence, and add shot + Gaussian noise. Recover the spikes by solving the inverse problem, then score sensitivity/precision/F1 against the ground truth you made.
 
+**Scaffolding for the L1 (Lasso) solve** — this is the part most likely to trip you up, so here's the concrete shape of it:
+
+1. Build the kernel as a 1D array: `h = np.exp(-t_kernel / tau)`, where `t_kernel` covers ~5τ worth of frames (long enough for the exponential to decay to near zero).
+2. Build the Toeplitz convolution matrix $H$ (shape `n_frames × n_frames`), where each column is the kernel shifted down by one frame: for `i in range(n_frames)`, for `k in range(len(h))`, set `H[i+k, i] = h[k]` (skip if `i+k >= n_frames`). Column `i` of $H$ is "what the fluorescence looks like if there's exactly one spike at frame `i`" — multiplying $H$ by a spike vector $s$ gives you back a fluorescence trace.
+3. Subtract off the baseline from your fluorescence (`F - F.min()`, or similar) so the target you're fitting against starts near zero, matching what $Hs$ produces for an all-zero spike train.
+4. Fit `sklearn.linear_model.Lasso(alpha=..., positive=True).fit(H, F_baseline_subtracted)`. The `.coef_` attribute *is* your recovered spike-amplitude vector $s$ — no separate "solve" step needed beyond this one `.fit()` call.
+5. `alpha` controls sparsity: start small (e.g. `0.001` for data on the ~100-count scale) and adjust. All-zero output → `alpha` too large. Way more nonzero entries than plausible spikes → `alpha` too small.
+6. Find discrete spike times with `scipy.signal.find_peaks(s, height=s.max() * 0.15, distance=...)` — a height relative to that trace's own max, not an absolute number, since amplitude scale varies.
+
 ⚠️ Two things that will silently break this:
-- **Use a non-negative Lasso** (`sklearn.linear_model.Lasso(positive=True)`) for the actual L1 sparsity penalty — not `scipy.optimize.nnls` plus a smoothness penalty. Spikes are sparse impulses, not smooth curves; a smoothness penalty fights against recovering them.
+- **Use a non-negative Lasso**, not `scipy.optimize.nnls` plus a smoothness penalty. Spikes are sparse impulses, not smooth curves; a smoothness penalty (penalizing differences between neighboring $s$ values) fights against recovering them.
 - **Match peaks, not frames.** The recovered trace spreads across several frames around each real event. Find peaks in it and match each to the nearest true spike within a small tolerance window — comparing frame-by-frame manufactures false positives out of one event's own shoulders.
 
 💬 This is the most mathematically involved exercise — if the inverse problem, the Toeplitz matrix, or why the L1 penalty matters doesn't click, ask Cline to walk through it with a concrete small example (e.g. 3 spikes, a short kernel). Also a good exercise to ask Cline to help tune `alpha` if your solver returns all zeros or way too many spikes.
@@ -467,13 +476,15 @@ Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/
 
 **Data**: Use a subset of run02-054 — e.g. the first 30 good-quality cells and the first 2000 frames (~2.2 minutes). The deconvolution below solves an $n_{\text{frames}} \times n_{\text{frames}}$ system per cell, so runtime grows fast with both cell count and frame count; a subset keeps this tractable. The benchmarks below were measured on exactly this subset — running on the full 113 cells × 4535 frames will work but will be much slower, and your numbers may shift somewhat since more/different cells are included.
 
-**Method**: For each cell in your subset, estimate its own τ from the autocovariance of its fluorescence trace (fit the exponential decay slope across several lags — don't assume Suite2p's fixed 1.0s applies to every cell). Deconvolve real fluorescence with that cell's own kernel using the same Lasso approach as Deliverable 1, then score agreement against Suite2p's spike inference (`spks.npy`) using the **same sensitivity/precision/F1 metrics as Deliverable 1**.
+**Method**: For each cell in your subset, estimate its own τ from the autocovariance of its fluorescence trace (fit the exponential decay slope across several lags — don't assume Suite2p's fixed 1.0s applies to every cell). Deconvolve real fluorescence with that cell's own kernel using the same Lasso approach as Deliverable 1 (note: `alpha` will likely need to be much larger here — real fluorescence is on a much bigger absolute scale than the synthetic data).
 
-⚠️ Suite2p's spikes are *not* a sparse 0/1 train — thresholding at ">0" isn't meaningful. Find peaks in it the same way you find peaks in your own trace, and don't switch to a different metric like Jaccard, which hides whether you're over- or under-detecting relative to Suite2p.
+Then compare against Suite2p's spike inference (`spks.npy`) — but **not** with sensitivity/precision/F1. Suite2p's own documentation doesn't define any threshold for turning its continuous output into discrete spike events; it's meant to be used as a continuous trace. Inventing your own threshold just to force a sensitivity/precision number would mean that number partly reflects your arbitrary threshold choice, not real agreement between the two methods. Instead, **correlate the two continuous traces directly**, per cell — no threshold needed.
 
-**Expected result** (this dataset):
+⚠️ This is a different metric than Deliverable 1 on purpose: Deliverable 1 has real discrete ground truth (you generated the spikes), so sensitivity/precision/F1 makes sense there. Deliverable 2's real-data comparison has no discrete ground truth — just two different continuous estimates — so a continuous correlation is the honest comparison.
+
+**Results should look something like this** (this dataset):
 - **Deliverable 1 (synthetic, SNR ≈ 3)**: F1 ≈ 0.34 (sensitivity 32%, precision 37%) — modest. Deconvolving overlapping, noisy transients is a genuinely hard problem; don't expect near-perfect recovery from a basic solver.
-- **Deliverable 2 (real data)**: per-cell τ ranges ~0.17–2.3s, median ≈ 0.41s — clearly not one-size-fits-all, and mostly below Suite2p's fixed 1.0s. Against Suite2p's spike inference: F1 ≈ 0.73 (sensitivity 88%, precision 68%) — better agreement than the synthetic case, likely because real transients are larger relative to noise, and per-cell kernels fit real heterogeneity better than one global kernel.
+- **Deliverable 2 (real data)**: per-cell τ ranges ~0.17–2.3s, median ≈ 0.41s — clearly not one-size-fits-all, and mostly below Suite2p's fixed 1.0s. Correlation with Suite2p's spike inference: mean r ≈ **0.81**, median ≈ **0.85** across 30 cells, with 29/30 cells above r = 0.5 — strong agreement despite the two methods using completely different algorithms.
 
 ### Implementation Notes
 
@@ -483,7 +494,7 @@ Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/
 - **Estimating γ**: for exponential decay, $\text{acov}[\text{lag}] \propto \gamma^{\text{lag}}$ where $\gamma = \exp(-1/(\tau \cdot \text{frame\_rate}))$. Fit $\log(\text{acov})$ vs. lag over several lags — one two-point ratio is too noisy for a single real trace.
 - **Tune `alpha` (the L1 penalty) by scale.** Too large and the solver returns all zeros; too small and it overfits noise. Real fluorescence (hundreds–thousands of counts) needs a much larger `alpha` than the synthetic data in Deliverable 1 to have a comparable effect.
 
-### What You'll See
+### What Your Results Might Look Like
 
 **Synthetic validation (Deliverable 1):**
 
@@ -503,7 +514,7 @@ Suite2p's algorithm, **OASIS** ([docs](https://suite2p.readthedocs.io/en/latest/
 ![Medium activity cell comparison](assets/exercise2_real_comparison_medium.png)
 ![High activity cell comparison](assets/exercise2_real_comparison_high.png)
 
-*Fluorescence, Suite2p's spike inference, and this exercise's per-cell deconvolution, for a low-, medium-, and high-activity cell. Agreement is generally good on clear events, with some differences in amplitude and on marginal/ambiguous events — consistent with F1 ≈ 0.73.*
+*Top: raw fluorescence. Bottom: Suite2p's OASIS output and this exercise's per-cell deconvolution, both z-scored and overlaid directly (not thresholded into discrete events — see why above). The two traces track each other closely; the correlation value shown is the actual comparison metric, consistent with the ~0.81 mean across all 30 cells.*
 
 ---
 
@@ -538,7 +549,7 @@ Detect cells from the static mean image alone (smooth → threshold → connecte
 
 **Tuning tip**: a loose threshold (e.g. the 80th percentile) lets huge swaths of diffuse neuropil through alongside real cells, and a bare `size > 10 pixels` filter keeps tiny noise specks. Two changes make a real difference without adding any new method: (1) push the threshold much higher — only the brightest ~1% of pixels reliably separates cell bodies from neuropil background in this dataset — and (2) filter components by a size range matching real cells (this dataset's own ROIs span 31–1173 pixels), not just a low floor.
 
-**Expected result** (this dataset):
+**Results should look something like this** (this dataset):
 - With an 80th-percentile threshold and a bare `size > 10` filter: sensitivity **42.4%**, precision **33.5%**
 - With a 99th-percentile threshold and a size filter matching real cell dimensions (20–1500 pixels): sensitivity **51.2%**, precision **68.8%** — a substantial improvement from tuning the same simple method, not a different algorithm
 - Even tuned, this remains well below Suite2p's Sparsery — a single static image still doesn't contain enough information to separate cells from bright neuropil as reliably as a movie-aware method can
@@ -549,13 +560,13 @@ Position-matching only checks whether your detection's *center* landed near a Su
 
 **Method**: For every matched pair from Deliverable 1, pull your detection's own raw pixel-averaged trace directly from the movie (`ops.npy`'s registered TIFF, not anything Suite2p precomputed), and correlate it against Suite2p's own `F` trace for that same cell. Then look at a few of your best- and worst-correlated matches side by side — both the image (do the two ROI outlines actually overlap?) and the traces (do they move together?).
 
-**Expected result** (this dataset, using the tuned detector from Deliverable 1):
+**Results should look something like this** (this dataset, using the tuned detector from Deliverable 1):
 - Across the 64 matched pairs: mean correlation **0.48**, median **0.43**, range **[0.10, 0.93]**
 - 28 of 64 matches (44%) have correlation > 0.5 — genuinely capturing the same signal
 - 10 of 64 matches (16%) have correlation < 0.2 — spatially "close enough" but not the same signal
 - Better detection (Deliverable 1's tuning) didn't just find more matches — it found *better* ones: both the fraction of high-correlation matches and low-correlation matches improved. Looking at the remaining poor matches, the two ROI outlines are often still visibly non-overlapping — the 30-pixel matching threshold is loose enough to count some clearly-different blobs as a "match"
 
-### What You'll See
+### What Your Results Might Look Like
 
 ![ROI detection comparison](assets/exercise3_roi_detection_results.png)
 
