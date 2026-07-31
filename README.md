@@ -155,8 +155,6 @@ Once installed and configured:
 
 💬 Before trusting Cline with anything real, give it a trivial first task — e.g. "print the numbers 1 to 10" — just to confirm the API key and model are actually wired up correctly. Cheaper to catch a setup problem now than mid-exercise.
 
-❗ **Once that sanity check passes, ask Cline to read this README (`README.md`) in full.** That gives it the full context for everything you'll ask it afterward, instead of guessing from a single pasted snippet.
-
 ❗ **Keep Cline in Plan mode until you're actually ready for it to write code.** Cline has a Plan/Act toggle right in its chat box: in Plan mode, it reads files, asks clarifying questions, and lays out what it intends to do — but doesn't touch anything. Switch to Act mode only once its plan actually matches what you want; that's when it starts making edits. Working out the approach in Plan mode first is much cheaper than untangling a multi-file edit you didn't actually want.
 
 ### Usage Limits
@@ -181,6 +179,8 @@ Now that Cline is installed, use it to clone the repo.
 > "Clone the repository: https://github.com/depasquale-lab/NPC-SummerSchool-2026-AI-Coding.git"
 
 Cline will execute these commands for you. Then verify it worked by running `ls README.md` in a terminal. You should see the README.md file confirming it cloned successfully.
+
+❗ **Now that it's actually on disk, ask Cline to read this README (`README.md`) in full.** That gives it the full context for everything you'll ask it afterward, instead of guessing from a single pasted snippet.
 
 ❗ **This repo does not ship with a `.gitignore`** — right after cloning (before you create `.venv/` in Step 4, or run `git add -A` later) is the moment to fix that. Ask Cline: "Add a `.gitignore` for this project, covering things like the `.venv/` folder, notebook checkpoints, and any large data files." Skipping this is exactly how a multi-hundred-MB `.venv/` folder ends up accidentally committed and pushed.
 
