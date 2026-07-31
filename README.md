@@ -675,3 +675,22 @@ After implementing a simple detector, you'll see:
 This teaches you: **not every gap between a simple method and the real pipeline has the same cause. Some of it is a fixable weakness in your simple method (here, a global threshold's blindness to uneven illumination); the rest is a fundamental information gap (here, a static image discarding all temporal structure) that no amount of tuning on a single image can ever close. Telling those two apart — instead of lumping every shortfall into "needs a better algorithm" — is the actual skill this exercise is teaching.**
 
 ❗ **Commit and push your final progress.** Ask Cline: "Commit and push all my Exercise 3 work, then show me the full commit history for my branch so I can see everything I've done across all three exercises." A good last check before you're done — both to confirm nothing got missed, and to see your own progress laid out end to end.
+
+---
+
+## Looking Back: What These Three Exercises Actually Taught
+
+**On the analysis side**, all three exercises are variations on one theme: a real measurement is a mixture of signal and something else, and getting to the signal requires an explicit, checkable model of what that "something else" is — not a bigger dataset or a fancier black box.
+- **Exercise 1**: the contamination is additive and comes from a source you can measure separately (`Fneu`) — so it's removable with a simple, physically-motivated correction, and you can *prove* it worked by watching a correlation drop.
+- **Exercise 2**: the "something else" is time itself — a spike's effect is smeared across many frames by calcium kinetics, so recovering spikes means solving an explicit inverse problem, not staring at the trace harder. You validated on synthetic data with a known answer *before* trusting the method on anything real — arguably the single most important habit in the whole exercise.
+- **Exercise 3**: the "something else" is a missing dimension entirely — a static image discards the temporal information a real cell's activity is actually defined by, and no amount of threshold-tuning on that image can put it back. That's a fundamentally different kind of limitation than a parameter you can tune, and telling the two apart was the actual point.
+
+Across all three, the same discipline shows up: build the simplest model that could plausibly work, measure exactly how well it does against a real reference (Suite2p, or ground truth you generated yourself), and use the *size and shape* of the gap to explain *why* — not just to note that a gap exists.
+
+**On the AI-agent side**, you used Cline for the entire spectrum of this work, from setting up a virtual environment to debugging a matching bug buried in Exercise 3's evaluation metric. A few habits mattered more than others:
+- **Plan before you act.** Getting Cline to lay out its approach before writing any code catches a misunderstood requirement while it's still one sentence, not a multi-file mess to untangle afterward.
+- **Ask "why," not just "how."** Understanding what a Toeplitz matrix is, or why exponential decay follows from calcium clearance kinetics, is what let you judge whether Cline's code was solving the right problem — not just whether it ran without error.
+- **Never trust a result you haven't checked.** Every real number in this README exists because it was validated against something independent — synthetic ground truth, Suite2p's own output, or the dataset's own saved settings. That habit was deliberate throughout: a number is not credible just because code produced it.
+- **Not knowing the syntax was never the blocker.** If you came in without strong Python skills, that was fine by design — the actual skill these exercises built is knowing what to ask for, how to tell whether the answer is right, and when to push back and ask again. That skill transfers to any future project with an AI coding assistant, not just this dataset.
+
+That combination — a real, falsifiable model of your data, and a disciplined way of working with an agent that can write code faster than you can read it — is the actual takeaway here, more than any single number in this README.
