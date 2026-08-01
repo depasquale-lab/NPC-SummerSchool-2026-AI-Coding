@@ -1,5 +1,7 @@
 # Calcium Imaging Data Processing with Agentic AI
 
+❗ **Already working on your own branch from an earlier session?** `main` has changed substantially since then — sync before you continue, or you'll be working from a stale copy of these documents. ("Merging" just means folding the new changes from `main` into your branch, so your branch ends up with both your own work *and* everyone else's updates since — usually automatic, but if the same lines were changed in both places, you'll be asked to help decide which version wins.) Make sure you're on your own branch (`git branch` should star your branch, not `main`), then ask Claude Code: "Fetch the latest changes from origin, then merge main into my current branch." Have it walk you through any merge conflicts rather than guessing at them yourself.
+
 ## The Big Picture
 
 Over two sessions, you'll use Claude Code to analyze a real two-photon calcium imaging recording from an awake mouse — going from raw, noisy fluorescence video all the way to population-level structure across the recorded neurons. Every step follows the same pattern: understand what a real pipeline (Suite2p) does, build a simpler version of it yourself with Claude Code's help, and validate your result against a real reference before trusting it.

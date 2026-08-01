@@ -12,6 +12,8 @@
 | ✅ | **Verified, not assumed.** A specific number or setting that was checked against this dataset's actual saved settings or Suite2p's real code, not guessed from documentation or a typical default. |
 | 💬 | **A Claude Code tip.** A suggestion for something to ask or delegate to Claude Code at that specific point — optional, not required to complete the exercise. |
 
+❗ **Already have your own branch from an earlier session? Sync it with `main` before doing anything else — `main` has changed a lot since then.** ("Merging" just means folding the new changes from `main` into your branch, so your branch ends up with both your own work *and* everyone else's updates since — usually automatic, but if the same lines were changed in both places, you'll be asked to help decide which version wins.) Make sure you're actually on your own branch first (check with `git branch` — you want to see your branch name starred, not `main`), then ask Claude Code: "Fetch the latest changes from origin, then merge main into my current branch." If it flags any merge conflicts, don't guess at resolving them yourself — ask Claude Code to walk you through each one before you continue.
+
 ### What This Exercise Is About
 
 You'll learn to analyze **real two-photon calcium imaging recordings** from awake mice using Python and AI-assisted coding (Claude Code). The data comes from cortical neurons expressing genetically-encoded calcium indicators (jRGECO1a), imaged at 15 Hz during spontaneous activity.
@@ -187,7 +189,7 @@ Claude Code will execute these commands for you. Then verify it worked by runnin
 
 (Replace `username` with your SCC username.) This creates your personal branch where you'll commit your progress. Then confirm with `git branch` in a terminal. 
 
-💬 If "branch," "clone," or "commit" are unfamiliar git vocabulary, ask Claude Code to explain them using this exact situation as the example — much more concrete than a generic git tutorial.
+💬 If "branch," "clone," "commit," or "merge" are unfamiliar git vocabulary, ask Claude Code to explain them using this exact situation as the example — much more concrete than a generic git tutorial.
 
 ❗ **Important**: After you complete progress on each exercise, commit and push your work:
 
