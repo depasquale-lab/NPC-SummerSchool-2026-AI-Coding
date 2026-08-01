@@ -40,3 +40,47 @@ A few practical things worth knowing about running Claude Code itself, distinct 
 **Switching models — the speed/quality tradeoff.** Type `/model` to see and switch between available models. Claude Code defaults to a strong, capable model, but you can switch to a smaller, faster one for simpler tasks. The tradeoff is real in both directions: a smaller model uses up your usage allowance more slowly (so you get more total requests before hitting a limit), but it's also noticeably worse at hard, multi-step reasoning — the kind of thing several of these exercises actually require (e.g. debugging the causal-convolution alignment issue in Exercise 2, or reasoning through why a metric's matching rule matters in Exercise 3). A reasonable default: stay on the capable model for anything conceptually hard or unfamiliar, and only switch down for genuinely simple, mechanical requests (renaming a variable, adding a print statement) if you're trying to conserve usage.
 
 **What "compacting" means.** As a conversation with Claude Code gets long, it eventually fills up the model's available context window (the amount of text it can actually "see" at once, including everything said so far). When that happens, Claude Code automatically **compacts** — it summarizes the earlier parts of the conversation into a shorter form that preserves the important decisions and context, freeing up room to keep working instead of hitting a hard wall. You can also trigger this yourself with `/compact` if a session has gotten long and sluggish. This is normal and expected on longer sessions (like working through a whole exercise in one sitting) — it's not a sign anything went wrong, just Claude Code managing its own memory so the conversation can keep going.
+
+## What Happens When I Lose Access to Claude Code?
+
+Your Claude Code access is tied to the summer school itself — once it ends, that access ends too. You have (at least) two good options for continuing to work with an AI coding assistant afterward:
+
+### Option 1: Use Cline again
+
+This is the setup this course originally used, before switching to Claude Code — it still works, and it's free (you bring your own Gemini API key, which costs nothing for a personal Google account at the usage levels these exercises need). Full original setup instructions:
+
+**Installation Steps**
+
+1. Click on the **Extensions** toolbar item in VSCode and search for **"Cline"** and install.
+2. Click on the **"robot"** icon that should appear in the left toolbar to open Cline.
+3. Choose **"Bring my own API key"**.
+4. For API provider choose **"OpenAI Compatible"**.
+5. For Base URL type: `https://generativelanguage.googleapis.com/v1beta/openai/`
+6. Navigate to [https://aistudio.google.com/api-keys](https://aistudio.google.com/api-keys) (make sure you are logged in as your personal Google account) and click **"Create API key"**. This will create a project and API key.
+7. For OpenAI Compatible API key, copy-paste the key you just created.
+8. For model type: `gemini-3.1-flash-lite`
+
+**How to Use Cline**
+
+Once installed and configured:
+- Open Cline in VSCode (robot icon in left sidebar)
+- Paste your code or describe what you need help with
+- Ask questions like: "My correlations didn't decrease. What's wrong?" or "Explain neuropil correction"
+- Cline will help you debug, explain code, and suggest improvements
+
+💬 Before trusting Cline with anything real, give it a trivial first task — e.g. "print the numbers 1 to 10" — just to confirm the API key and model are actually wired up correctly. Cheaper to catch a setup problem now than mid-exercise.
+
+❗ **Keep Cline in Plan mode until you're actually ready for it to write code.** Cline has a Plan/Act toggle right in its chat box: in Plan mode, it reads files, asks clarifying questions, and lays out what it intends to do — but doesn't touch anything. Switch to Act mode only once its plan actually matches what you want; that's when it starts making edits. Working out the approach in Plan mode first is much cheaper than untangling a multi-file edit you didn't actually want.
+
+**Usage Limits**
+
+You get **500 requests per day** with `gemini-3.1-flash-lite`. Check usage at:
+[https://aistudio.google.com/rate-limit](https://aistudio.google.com/rate-limit)
+
+If you run out, switch to `gemma-4-26b-a4b-it` (1.5K requests/day, less capable).
+
+💬 500/day sounds like a lot until you're mid-debug and firing off a request every minute. If you're not sure whether something is worth "spending" a request on, batching a few related questions into one message is usually better than several small back-and-forths.
+
+### Option 2: OpenCode
+
+[**opencode.ai**](https://opencode.ai/) is another good option — an open-source, terminal-based AI coding agent that connects to many different model providers (Gemini, Claude, GPT, and others), similar in spirit to Cline or Claude Code but not tied to any one of them. I've tried it myself and it works well paired with Gemini specifically, which you get free with a personal Google account — a genuinely solid, no-cost combination once your Claude Code access here ends.
